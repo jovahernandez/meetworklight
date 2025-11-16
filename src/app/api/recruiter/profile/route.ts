@@ -5,6 +5,8 @@ import { SupabaseUserRepository } from '@/infrastructure/supabase/SupabaseUserRe
 import { CreateRecruiterProfile } from '@/application/use-cases/recruiter/CreateRecruiterProfile';
 import { UpdateRecruiterProfile } from '@/application/use-cases/recruiter/UpdateRecruiterProfile';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
     try {
         const supabase = await createClient();
