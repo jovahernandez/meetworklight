@@ -23,14 +23,14 @@ export async function POST(request: NextRequest) {
 
         if (authError) {
             console.error('Error in register endpoint:', authError);
-            
+
             if (authError.message?.includes('already registered')) {
                 return NextResponse.json(
                     { error: 'Este correo electrónico ya está registrado' },
                     { status: 409 }
                 );
             }
-            
+
             return NextResponse.json(
                 { error: authError.message },
                 { status: 400 }
