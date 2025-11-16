@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SupabaseAuthService } from '@/infrastructure/supabase/SupabaseAuthService';
-import { SupabaseUserRepository } from '@/infrastructure/supabase/SupabaseUserRepository';
-import { LoginUser } from '@/application/use-cases/auth/LoginUser';
+import { createClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
     try {
@@ -15,26 +13,38 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Initialize dependencies
-        const authService = new SupabaseAuthService();
-        const userRepository = new SupabaseUserRepository();
+        const supabase = await createClient();
 
-        // Execute use case
-        const loginUseCase = new LoginUser(authService);
-        const result = await loginUseCase.execute({ email, password });
+        // Login with Supabase
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+            email,
+            password,
+        });
+
+        if (authError || !authData.user) {
+            console.error('Error in login endpoint:', authError);
+            return NextResponse.json(
+                { error: 'Credenciales inválidas' },
+                { status: 401 }
+            );
+        }
 
         // Get user data
-        const user = await userRepository.findById(result.user.id);
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', authData.user.id)
+            .single();
 
         return NextResponse.json({
             success: true,
             data: {
                 user: {
-                    id: result.user.id,
-                    email: result.user.email,
+                    id: authData.user.id,
+                    email: authData.user.email,
                     role: user?.role || null,
                 },
-                accessToken: result.accessToken,
+                accessToken: authData.session?.access_token,
             },
             message: 'Inicio de sesión exitoso',
         });

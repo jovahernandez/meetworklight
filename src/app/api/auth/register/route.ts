@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SupabaseAuthService } from '@/infrastructure/supabase/SupabaseAuthService';
-import { SupabaseUserRepository } from '@/infrastructure/supabase/SupabaseUserRepository';
-import { RegisterUser } from '@/application/use-cases/auth/RegisterUser';
+import { createClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
     try {
@@ -15,19 +13,59 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Initialize dependencies
-        const authService = new SupabaseAuthService();
-        const userRepository = new SupabaseUserRepository();
+        const supabase = await createClient();
 
-        // Execute use case
-        const registerUseCase = new RegisterUser(authService, userRepository);
-        const user = await registerUseCase.execute({ email, password }); return NextResponse.json({
+        // Register with Supabase
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+            email,
+            password,
+        });
+
+        if (authError) {
+            console.error('Error in register endpoint:', authError);
+            
+            if (authError.message?.includes('already registered')) {
+                return NextResponse.json(
+                    { error: 'Este correo electrónico ya está registrado' },
+                    { status: 409 }
+                );
+            }
+            
+            return NextResponse.json(
+                { error: authError.message },
+                { status: 400 }
+            );
+        }
+
+        if (!authData.user) {
+            return NextResponse.json(
+                { error: 'No se pudo crear el usuario' },
+                { status: 500 }
+            );
+        }
+
+        // Create user record in public.users table
+        const { error: userError } = await supabase
+            .from('users')
+            .insert({
+                id: authData.user.id,
+                email: authData.user.email,
+                role: null,
+                created_at: new Date().toISOString(),
+            });
+
+        if (userError) {
+            console.error('Error creating user record:', userError);
+            // Continue anyway, user is already created in auth
+        }
+
+        return NextResponse.json({
             success: true,
             data: {
-                userId: user.id,
-                email: user.email,
-                role: user.role,
-                createdAt: user.createdAt,
+                userId: authData.user.id,
+                email: authData.user.email,
+                role: null,
+                createdAt: authData.user.created_at,
             },
             message: 'Usuario registrado exitosamente. Por favor selecciona tu tipo de perfil.',
         });
