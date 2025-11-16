@@ -1,0 +1,308 @@
+===========================================
+MEETWORK LIGHT - RESUMEN EJECUTIVO
+===========================================
+
+INTRODUCCIÓN
+------------
+Meetwork Light es una aplicación web monolítica especializada en conectar talento industrial con oportunidades laborales en México. Esta versión MVP implementa exclusivamente el módulo de vacantes y búsqueda de empleo, dejando espacio para futuras extensiones como feed social, academia y mensajería.
+
+
+ARQUITECTURA GENERAL
+--------------------
+El proyecto sigue una arquitectura hexagonal (Ports and Adapters) implementada como monolito fullstack con Next.js 14.
+
+Capas Principales:
+
+1. DOMINIO (Core Business Logic)
+   - Entidades puras sin dependencias externas
+   - Ubicación: src/domain/entities/
+   - Componentes: User, RecruiterProfile, JobSeekerProfile, JobPosting, IndustrySector
+   - Errores de dominio: ValidationError, NotFoundError, UnauthorizedError
+
+2. APLICACIÓN (Use Cases / Application Services)
+   - Orquestación de la lógica de negocio
+   - Ubicación: src/application/use-cases/
+   - Casos de uso implementados:
+     * Autenticación: RegisterUser, LoginUser
+     * Reclutador: CreateRecruiterProfile, UpdateRecruiterProfile, CreateJobPosting, UpdateJobPosting, ListOwnJobPostings
+     * Buscador: CreateJobSeekerProfile, ListJobPostings, FilterJobPostings
+   - DTOs para entrada/salida de datos
+
+3. PUERTOS (Interfaces / Contratos)
+   - Abstracciones que definen comportamiento esperado
+   - Ubicación: src/ports/
+   - Repositorios: IUserRepository, IRecruiterProfileRepository, IJobSeekerProfileRepository, IJobPostingRepository, IIndustrySectorRepository
+   - Servicios: IAuthService
+
+4. INFRAESTRUCTURA (Adaptadores)
+   - Implementaciones concretas de los puertos
+   - Ubicación: src/infrastructure/supabase/
+   - Adaptadores implementados:
+     * SupabaseAuthService: manejo de registro, login, logout y sesiones
+     * Repositorios Supabase: CRUD completo para todas las entidades
+   - Cliente Supabase centralizado con configuración de auth persistente
+
+5. PRESENTACIÓN (Next.js App Router)
+   - Interfaces de usuario y Server Components
+   - Ubicación: src/app/ y src/components/
+   - Páginas principales:
+     * Home (landing page)
+     * /jobs (reel de vacantes con filtros)
+     * /auth/login, /auth/register, /auth/choose-role
+     * /recruiter/dashboard (panel del reclutador)
+   - Componentes reutilizables: Button, Input, Select, Card, JobCard, JobFilters, Header, Footer
+
+
+DECISIONES PRINCIPALES DE DISEÑO
+---------------------------------
+
+1. MONOLITO vs MICROSERVICIOS
+   - Se eligió arquitectura monolítica para simplificar el MVP
+   - Todo el código en un solo repositorio y servicio
+   - Un único punto de entrada en localhost:8000
+   - Facilita el desarrollo inicial y reduce complejidad operacional
+   - La arquitectura hexagonal permite migrar a microservicios en el futuro si es necesario
+
+2. FRAMEWORK: Next.js 14 (App Router)
+   - Fullstack en un solo framework (backend + frontend)
+   - Server Components para mejor performance y SEO
+   - Server Actions para mutaciones sin necesidad de API REST explícita
+   - Routing file-based intuitivo
+   - Configuración simple para correr en puerto 8000
+   - Ecosistema maduro con excelente DX
+
+3. BASE DE DATOS: Supabase (PostgreSQL)
+   - Solución BaaS completa (Database + Auth + Storage)
+   - PostgreSQL gestionado con buenas características (RLS, triggers, funciones)
+   - Cliente JavaScript oficial con tipos TypeScript
+   - Plan gratuito generoso para MVPs
+   - Escalable a producción sin cambios mayores
+
+4. AUTENTICACIÓN
+   - Supabase Auth nativo (email/password)
+   - Roles personalizados en tabla public.users (recruiter | seeker)
+   - Flujo de registro → elección de rol → creación de perfil
+   - Row Level Security (RLS) en Postgres para seguridad a nivel de datos
+   - Sesiones persistentes con tokens JWT
+
+5. ESTILO Y UI
+   - TailwindCSS para desarrollo rápido y consistente
+   - Paleta de colores basada en branding de Meetwork (azul industrial, naranja/amarillo construcción)
+   - Componentes UI propios (no librería externa) para máxima personalización
+   - Diseño responsive mobile-first
+   - Tipografía: Inter (body), Montserrat (headings)
+
+6. TESTING
+   - Vitest para tests unitarios (más rápido que Jest)
+   - Mocks propios para repositorios (sin dependencias de BD en tests unitarios)
+   - Cobertura inicial en casos de uso críticos: CreateJobPosting, FilterJobPostings
+   - Enfoque en lógica de negocio (application layer), no en UI components por ahora
+
+
+MODELOS Y TABLAS CLAVE
+-----------------------
+
+TABLA: users
+- Extensión de auth.users de Supabase
+- Campos: id (UUID, FK a auth.users), email (TEXT), role (TEXT: 'recruiter' | 'seeker'), created_at, updated_at
+- Índices: PK en id, UNIQUE en email
+- RLS: usuarios solo ven/actualizan sus propios datos
+
+TABLA: recruiter_profiles
+- Perfil de empresa/reclutador
+- Campos: id, user_id (FK), company_name, contact_name, phone, email_contact, location, industrial_sector, website (opcional), created_at, updated_at
+- Índices: PK en id, UNIQUE en user_id
+- RLS: reclutadores solo gestionan su propio perfil
+
+TABLA: job_seeker_profiles
+- Perfil de buscador de empleo
+- Campos: id, user_id (FK), full_name, main_role, years_experience (INTEGER), preferred_sectors (TEXT[]), location, open_to_relocation (BOOLEAN), created_at, updated_at
+- Índices: PK en id, UNIQUE en user_id
+- RLS: buscadores solo gestionan su propio perfil
+
+TABLA: job_postings
+- Vacantes publicadas
+- Campos: id, recruiter_id (FK a users), title, company_name, location, industrial_sector, job_area, contract_type (enum), modality (enum), salary_range (TEXT opcional), shift (enum), description_short, description_long (opcional), contact_phone, contact_email, is_active (BOOLEAN), created_at, updated_at
+- Índices: PK en id, índices en recruiter_id, is_active, industrial_sector, location, created_at
+- RLS: vacantes activas son públicas; reclutadores ven/editan/borran solo las suyas
+
+TABLA: industry_sectors
+- Catálogo de sectores industriales
+- Campos: id, name (TEXT), slug (TEXT UNIQUE)
+- Datos semilla: Construcción, Logística y Transporte, Manufactura, Energía, Minería, Agricultura, Petróleo y Gas, Automotriz, Alimentaria, Química/Farmacéutica
+- RLS: lectura pública
+
+ENUMS (implementados como CHECKs en Postgres y tipos TS):
+- contract_type: 'full-time', 'part-time', 'project', 'temporary'
+- modality: 'on-site', 'hybrid', 'remote'
+- shift: 'morning', 'afternoon', 'night', 'rotating', 'flexible'
+
+
+CASOS DE USO PRINCIPALES Y ENDPOINTS
+-------------------------------------
+
+AUTENTICACIÓN:
+- POST /api/auth/register (pendiente implementar)
+  → Use case: RegisterUser
+  → Input: { email, password }
+  → Output: User creado en Supabase Auth + tabla users
+  
+- POST /api/auth/login (pendiente implementar)
+  → Use case: LoginUser
+  → Input: { email, password }
+  → Output: JWT session token
+  
+- POST /api/auth/set-role (pendiente implementar)
+  → Actualiza el rol del usuario recién registrado
+  → Input: { role: 'recruiter' | 'seeker' }
+
+RECLUTADORES:
+- POST /api/recruiter/profile (pendiente)
+  → Use case: CreateRecruiterProfile
+  → Input: CreateRecruiterProfileDTO
+  → Validaciones: campos requeridos, formato de email
+
+- POST /api/recruiter/jobs (pendiente)
+  → Use case: CreateJobPosting
+  → Input: CreateJobPostingDTO
+  → Validaciones: usuario debe tener perfil de reclutador, todos los campos requeridos, formato de email de contacto
+  
+- GET /api/recruiter/jobs (pendiente)
+  → Use case: ListOwnJobPostings
+  → Output: lista de vacantes del reclutador autenticado
+
+BUSCADORES:
+- GET /api/jobs
+  → Use case: FilterJobPostings
+  → Query params: searchText, location, industrialSector, jobArea, contractType, modality
+  → Output: lista de JobPosting activas filtradas
+  → Ordenamiento: por created_at DESC (más recientes primero)
+
+PÁGINA WEB (Server-Side Rendering):
+- / → Landing page con misión de Meetwork y CTAs
+- /jobs → Reel de vacantes con filtros interactivos (client component)
+- /auth/login → Formulario de login
+- /auth/register → Formulario de registro
+- /auth/choose-role → Selección de tipo de perfil post-registro
+- /recruiter/dashboard → Panel del reclutador con links a gestión de vacantes
+
+
+PASOS PARA CORRER EL PROYECTO EN LOCALHOST:8000
+------------------------------------------------
+
+PREREQUISITOS:
+1. Node.js 18 o superior instalado
+2. npm o yarn
+3. Cuenta de Supabase (gratuita) creada en https://supabase.com
+
+CONFIGURACIÓN INICIAL:
+
+Paso 1: Instalar dependencias
+  Abrir PowerShell en la carpeta del proyecto:
+  cd "c:\Users\jovan\Desktop\meetwork ligh"
+  npm install
+
+Paso 2: Configurar variables de entorno
+  Copiar el archivo de ejemplo:
+  copy .env.example .env.local
+  
+  Editar .env.local con las credenciales de Supabase:
+  NEXT_PUBLIC_SUPABASE_URL=https://tu-proyecto-id.supabase.co
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-clave-anon-publica
+  NEXT_PUBLIC_APP_URL=http://localhost:8000
+
+Paso 3: Configurar la base de datos en Supabase
+  1. Ir a tu proyecto en Supabase
+  2. Abrir el SQL Editor
+  3. Copiar y ejecutar el contenido completo de:
+     src/infrastructure/migrations/001_initial_schema.sql
+  4. Verificar que se crearon las tablas: users, recruiter_profiles, job_seeker_profiles, job_postings, industry_sectors
+  5. Confirmar que la tabla industry_sectors tiene datos (10 sectores industriales)
+
+Paso 4: Iniciar el servidor de desarrollo
+  npm run dev
+  
+  La aplicación estará disponible en:
+  http://localhost:8000
+
+COMANDOS ADICIONALES:
+
+Build para producción:
+  npm run build
+  npm start
+
+Ejecutar tests unitarios:
+  npm test
+
+Tests en modo watch (desarrollo):
+  npm run test:watch
+
+Linter (verificación de código):
+  npm run lint
+
+
+ESTADO ACTUAL Y LIMITACIONES
+-----------------------------
+
+COMPLETADO:
+- Estructura completa del proyecto con arquitectura hexagonal
+- Modelos de dominio y entidades TypeScript
+- Casos de uso con validaciones
+- Repositorios Supabase para todas las entidades
+- Migraciones de base de datos con RLS
+- Componentes UI básicos (Button, Input, Select, Card)
+- Páginas de landing, jobs, login, register, choose-role, recruiter dashboard
+- Filtros de vacantes con múltiples criterios
+- Tests unitarios para CreateJobPosting y FilterJobPostings con mocks
+- README con instrucciones de instalación
+
+PENDIENTE DE IMPLEMENTAR:
+- API routes para autenticación (/api/auth/*)
+- Server Actions completos para crear/editar perfiles y vacantes
+- Middleware de protección de rutas por rol
+- Formularios funcionales de creación/edición de vacantes
+- Formularios de perfil de reclutador y buscador
+- Validación de formularios en frontend (con Zod o similar)
+- Paginación de resultados de vacantes
+- Manejo completo de errores en frontend (toast notifications)
+- Tests de integración con Supabase
+- Tests E2E
+
+NOTA IMPORTANTE:
+El código frontend hace fetch a /api/jobs pero esa ruta devuelve vacantes de manera básica. Las páginas de login y register tienen la UI pero los endpoints /api/auth/* NO están implementados todavía. Es necesario completar esos endpoints y conectar con los use cases existentes para tener una aplicación completamente funcional.
+
+
+PRÓXIMOS PASOS RECOMENDADOS
+----------------------------
+
+Corto plazo (necesarios para MVP funcional):
+1. Implementar API routes de autenticación completos
+2. Crear Server Actions para gestión de perfiles y vacantes
+3. Implementar middleware de protección de rutas
+4. Formularios completos con validación frontend
+5. Manejo de estados de carga y errores en UI
+
+Mediano plazo (extensiones planificadas):
+1. Módulo de feed social
+2. Módulo de academia con cursos
+3. Sistema de aplicaciones a vacantes
+4. Mensajería interna entre usuarios
+5. Planes premium con monetización
+
+Mejoras técnicas:
+1. Aumentar cobertura de tests (>80%)
+2. Implementar CI/CD pipeline
+3. Dockerizar la aplicación
+4. Integración con herramientas de monitoreo (Sentry, Analytics)
+5. Optimización de performance (ISR, caching)
+
+
+CONTACTO Y DOCUMENTACIÓN ADICIONAL
+-----------------------------------
+
+Para más detalles sobre mejoras futuras, ver: NEXT_STEPS.md
+Para instrucciones de desarrollo, ver: README.md
+Migraciones de base de datos: src/infrastructure/migrations/
+Casos de uso documentados: src/application/use-cases/
+
+Equipo Meetwork - Noviembre 2025
