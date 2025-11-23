@@ -21,6 +21,17 @@ export interface JobPosting {
     isActive: boolean;
     createdAt: Date;
     updatedAt: Date;
+    // Iteración 2: Datos de seguridad
+    companyRfc: string;
+    companyLocation: string;
+    worksiteLocation: string;
+    worksiteGoogleMapsUrl?: string; // opcional solo si remote
+    contractorPhoneWhatsapp: string;
+    companyPhone: string;
+    startDate: Date;
+    // Iteración 3.1: Vigencia (expiresAt puede ser null para vacantes viejas)
+    validityDays: number;
+    expiresAt: Date | null;
 }
 
 export interface CreateJobPostingParams {
@@ -38,6 +49,17 @@ export interface CreateJobPostingParams {
     descriptionLong?: string;
     contactPhone: string;
     contactEmail: string;
+    // Iteración 2: Datos de seguridad
+    companyRfc: string;
+    companyLocation: string;
+    worksiteLocation: string;
+    worksiteGoogleMapsUrl?: string;
+    contractorPhoneWhatsapp: string;
+    companyPhone: string;
+    startDate: Date;
+    // Iteración 3.1: Vigencia
+    validityDays: number;
+    expiresAt: Date; // Calculado en backend
 }
 
 export interface UpdateJobPostingParams {
@@ -55,4 +77,15 @@ export interface UpdateJobPostingParams {
     contactPhone?: string;
     contactEmail?: string;
     isActive?: boolean;
+    // Iteración 2: Datos de seguridad
+    companyRfc?: string;
+    companyLocation?: string;
+    worksiteLocation?: string;
+    worksiteGoogleMapsUrl?: string;
+    contractorPhoneWhatsapp?: string;
+    companyPhone?: string;
+    startDate?: Date;
+    // Iteración 3.1: Vigencia
+    validityDays?: number;
+    expiresAt?: Date; // Recalculado si cambia validityDays
 }
