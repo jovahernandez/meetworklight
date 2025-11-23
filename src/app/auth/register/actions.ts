@@ -36,12 +36,27 @@ export async function signUp(formData: FormData) {
     const email = formData.get('email') as string
     const password = formData.get('password') as string
 
+    // Verificar si el email ya existe
+    const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', email)
+        .single()
+
+    if (existingUser) {
+        return { error: 'Este correo ya está registrado. Por favor, inicia sesión.' }
+    }
+
     const { error } = await supabase.auth.signUp({
         email,
         password,
     })
 
     if (error) {
+        // Capturar específicamente error de email duplicado
+        if (error.message.includes('already registered') || error.message.includes('User already registered')) {
+            return { error: 'Este correo ya está registrado. Por favor, inicia sesión.' }
+        }
         return { error: error.message }
     }
 
