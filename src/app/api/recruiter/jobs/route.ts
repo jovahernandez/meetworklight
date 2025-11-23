@@ -57,7 +57,13 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
 
         console.log('✏️ DEBUG - Creating job for user:', user.id);
-        console.log('✏️ DEBUG - Job data:', JSON.stringify(body, null, 2));
+        console.log('✏️ DEBUG - Job data (raw):', JSON.stringify(body, null, 2));
+
+        // Convertir startDate de string ISO a Date
+        if (body.startDate) {
+            body.startDate = new Date(body.startDate);
+            console.log('✏️ DEBUG - Converted startDate:', body.startDate);
+        }
 
         const jobPostingRepo = new SupabaseJobPostingRepository();
         const recruiterProfileRepo = new SupabaseRecruiterProfileRepository();

@@ -88,8 +88,8 @@ export default function CreateJobPage() {
                 ...formData,
                 descriptionLong: tasksList,
                 salaryRange,
-                // Convertir startDate a objeto Date
-                startDate: formData.startDate ? new Date(formData.startDate) : new Date(),
+                // Convertir startDate a objeto Date (formato YYYY-MM-DD del input date)
+                startDate: formData.startDate ? new Date(formData.startDate + 'T00:00:00') : new Date(),
                 // Iteración 3: validityDays ya viene como número del slider
                 validityDays: formData.validityDays,
             };
