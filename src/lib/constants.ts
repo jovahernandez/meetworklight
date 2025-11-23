@@ -1,56 +1,51 @@
-// Industry Sectors
+// Industry Sectors - Solo Construcción
 export const INDUSTRY_SECTORS = [
     'Construcción',
-    'Logística y Transporte',
-    'Manufactura',
-    'Energía',
-    'Minería',
-    'Agricultura y Agroindustria',
-    'Petróleo y Gas',
-    'Automotriz',
-    'Alimentaria',
-    'Química y Farmacéutica',
 ] as const;
 
-// Job Areas
+// Job Areas - Específicas para Construcción (todas en singular)
 export const JOB_AREAS = [
-    'Operativo',
-    'Supervisión',
-    'Ingeniería',
-    'Logística',
-    'Administración',
-    'Seguridad',
-    'Calidad',
-    'Mantenimiento',
-    'Ventas',
-    'Recursos Humanos',
+    'Ayudante general',
+    'Medio oficial',
+    'Oficial',
+    'Cabo',
+    'Sobrestante',
+    'Ingeniero',
+    'Arquitecto',
+    'Técnico',
+    'Supervisor de Seguridad',
+    'Auxiliar de seguridad',
+    'Paramédico',
+    'Asesor',
+    'Auditor',
+    'Ingeniero ambiental',
+    'Biólogo',
+    'Gerente',
+    'Otro',
 ] as const;
 
-// Contract Types
-export const CONTRACT_TYPES = {
-    'full-time': 'Tiempo Completo',
-    'part-time': 'Medio Tiempo',
-    'project': 'Por Proyecto',
-    'temporary': 'Temporal',
-} as const;
+// Contract Types - en español para coincidir con la base de datos
+export const CONTRACT_TYPES = [
+    'Tiempo Completo',
+    'Medio Tiempo',
+    'Por Proyecto',
+    'Temporal',
+] as const;
 
-// Modalities
-export const MODALITIES = {
-    'on-site': 'Presencial',
-    'hybrid': 'Híbrido',
-    'remote': 'Remoto',
-} as const;
+// Modalities - Solo Presencial
+export const MODALITIES = [
+    'Presencial',
+] as const;
 
-// Shifts
-export const SHIFTS = {
-    'morning': 'Matutino',
-    'afternoon': 'Vespertino',
-    'night': 'Nocturno',
-    'rotating': 'Rolas',
-    'flexible': 'Flexible',
-} as const;
+// Shifts - en español para coincidir con la base de datos
+export const SHIFTS = [
+    'Diurno',
+    'Nocturno',
+    'Mixto',
+    'Rotativo',
+] as const;
 
-// Common locations in Mexico (industrial hubs)
+// Common locations in Mexico (principales ciudades con desarrollo de construcción)
 export const COMMON_LOCATIONS = [
     'Ciudad de México',
     'Monterrey',
@@ -66,4 +61,7 @@ export const COMMON_LOCATIONS = [
     'Toluca',
     'Hermosillo',
     'Chihuahua',
+    'Mérida',
+    'Cancún',
+    'Playa del Carmen',
 ] as const;

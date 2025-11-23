@@ -120,13 +120,13 @@ export default function JobsPage() {
             max: Math.max(...parsedNumbers)
         };
     }; return (
-        <div className="container mx-auto px-4 py-8">
-            <div className="mb-8">
-                <h1 className="text-4xl font-heading font-bold text-neutral-900 mb-2">
+        <div className="container mx-auto px-4 py-6 md:py-8">
+            <div className="mb-6 md:mb-8">
+                <h1 className="text-2xl md:text-4xl font-heading font-bold text-neutral-900 mb-2">
                     Vacantes Disponibles
                 </h1>
-                <p className="text-lg text-neutral-600">
-                    Explora oportunidades en el sector industrial
+                <p className="text-base md:text-lg text-neutral-600">
+                    Explora oportunidades en el sector de la construcción
                 </p>
             </div>
 
@@ -137,13 +137,13 @@ export default function JobsPage() {
                     <p className="text-neutral-600">Cargando vacantes...</p>
                 </div>
             ) : filteredJobs.length === 0 ? (
-                <div className="text-center py-12">
-                    <p className="text-neutral-600">
+                <div className="text-center py-12 px-4">
+                    <p className="text-neutral-600 text-sm md:text-base">
                         No se encontraron vacantes que coincidan con los filtros seleccionados.
                     </p>
                 </div>
             ) : (
-                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1 max-w-4xl mx-auto">
+                <div className="grid gap-4 md:gap-6 grid-cols-1 max-w-4xl mx-auto">
                     {filteredJobs.map((job) => (
                         <JobCard key={job.id} job={job} />
                     ))}

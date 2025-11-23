@@ -44,6 +44,7 @@ export class SupabaseAuthService implements IAuthService {
             email: data.user.email!,
             role: null,
             createdAt: new Date(data.user.created_at),
+            termsAccepted: false,
         };
     }
 
@@ -60,7 +61,7 @@ export class SupabaseAuthService implements IAuthService {
         // Fetch user role from public.users
         const { data: userData, error: userError } = await supabase
             .from('users')
-            .select('role')
+            .select('role, terms_accepted, terms_accepted_at, terms_version')
             .eq('id', data.user.id)
             .single();
 
@@ -73,6 +74,9 @@ export class SupabaseAuthService implements IAuthService {
             email: data.user.email!,
             role: userData.role as 'recruiter' | 'seeker',
             createdAt: new Date(data.user.created_at),
+            termsAccepted: userData.terms_accepted || false,
+            termsAcceptedAt: userData.terms_accepted_at ? new Date(userData.terms_accepted_at) : undefined,
+            termsVersion: userData.terms_version || undefined,
         };
 
         return {
@@ -98,7 +102,7 @@ export class SupabaseAuthService implements IAuthService {
         // Fetch user role from public.users
         const { data: userData, error: userError } = await supabase
             .from('users')
-            .select('role')
+            .select('role, terms_accepted, terms_accepted_at, terms_version')
             .eq('id', user.id)
             .single();
 
@@ -111,6 +115,9 @@ export class SupabaseAuthService implements IAuthService {
             email: user.email!,
             role: userData.role as 'recruiter' | 'seeker',
             createdAt: new Date(user.created_at),
+            termsAccepted: userData.terms_accepted || false,
+            termsAcceptedAt: userData.terms_accepted_at ? new Date(userData.terms_accepted_at) : undefined,
+            termsVersion: userData.terms_version || undefined,
         };
     }
 

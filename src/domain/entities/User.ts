@@ -5,6 +5,10 @@ export interface User {
     email: string;
     role: UserRole | null; // Allow null for users who haven't chosen a role yet
     createdAt: Date;
+    // Nuevos campos para términos (Iteración 1)
+    termsAccepted: boolean;
+    termsAcceptedAt?: Date;
+    termsVersion?: string;
 }
 
 export interface CreateUserParams {

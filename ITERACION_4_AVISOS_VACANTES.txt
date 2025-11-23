@@ -1,0 +1,637 @@
+================================================================================
+  ITERACIÓN 4: Avisos al Reclutador sobre Vigencia de Vacantes
+  Fecha: 23 de enero de 2025
+================================================================================
+
+OBJETIVO:
+Convertir la información de vigencia existente (validityDays, expiresAt, estados)
+en un flujo de avisos in-app para que el RH gestione proactivamente sus vacantes.
+
+NO se implementan emails automáticos (solo hooks para Iteración 5).
+NO se modificó lógica de negocio de vigencia (solo UX).
+NO se tocó KYC, términos, seguridad ni Iteraciones 1, 2, 3 y 3.1.
+
+================================================================================
+1. CAMBIOS EN DASHBOARD DEL RECLUTADOR (/recruiter/jobs)
+================================================================================
+
+A) SECCIÓN DE AVISOS (NUEVO - PARTE SUPERIOR DEL DASHBOARD)
+───────────────────────────────────────────────────────────
+
+Se agregó una mini sección ENCIMA del listado de vacantes que funciona como
+"centro de avisos" de vigencia. Muestra automáticamente el estado más urgente.
+
+ESCENARIO 1: Reclutador con vacantes EXPIRADAS
+-----------------------------------------------
+Prioridad: ALTA (se muestra este bloque aunque también tenga "por expirar")
+
+Componente:
+- Card con borde rojo (border-red-300) y fondo rojo claro (bg-red-50)
+- Icono: 🔴
+- Título: "Vacantes Expiradas"
+- Mensaje: "Tienes N vacante(s) expirada(s) que ya no se muestra(n) a los candidatos."
+
+Contenido:
+- Lista de máximo 3 vacantes expiradas
+- Para cada vacante:
+  * Título del puesto
+  * "Expirada hace X días" (calculado como abs(daysLeft))
+  * Botón "Renovar" → lleva a /recruiter/jobs/[id]/edit
+
+- Si hay más de 3 expiradas:
+  * Texto: "+ X vacante(s) expirada(s) más"
+
+ESCENARIO 2: Reclutador SIN expiradas pero CON vacantes POR EXPIRAR
+--------------------------------------------------------------------
+Prioridad: MEDIA (solo se muestra si NO hay expiradas)
+
+Componente:
+- Card con borde naranja (border-orange-300) y fondo naranja claro (bg-orange-50)
+- Icono: ⚠️
+- Título: "Vacantes Por Expirar"
+- Mensaje: "Tienes N vacante(s) que expira(n) en los próximos 3 días."
+
+Contenido:
+- Lista de máximo 3 vacantes por expirar (daysLeft 0-3)
+- Para cada vacante:
+  * Título del puesto
+  * "Expira en X días"
+  * Botón "Extender Vigencia" → lleva a /recruiter/jobs/[id]/edit
+
+- Si hay más de 3 por expirar:
+  * Texto: "+ X vacante(s) por expirar más"
+
+ESCENARIO 3: Reclutador SIN problemas de vigencia
+--------------------------------------------------
+Prioridad: BAJA (solo se muestra si todo está OK)
+
+Componente:
+- Card con borde verde (border-green-200) y fondo verde claro (bg-green-50)
+- Icono: ✅
+- Mensaje: "Todas tus vacantes vigentes están dentro de su periodo de publicación."
+
+ESCENARIO 4: Reclutador sin vacantes
+-------------------------------------
+NO se muestra ningún bloque de avisos (se mantiene el mensaje de "No tienes vacantes").
+
+IMPLEMENTACIÓN:
+- Se agregó función getValidityAlerts() que filtra jobs por estado
+- Calcula: validityAlerts.expired y validityAlerts.expiringSoon
+- Renderizado condicional según prioridad (expired > expiring_soon > all_ok)
+- NO se hacen queries adicionales (reutiliza datos ya cargados)
+
+
+B) BOTONES CTA EN CARDS DE VACANTES (MEJORADO)
+───────────────────────────────────────────────
+
+ANTES (Iteración 3):
+- Solo botón "Ver Detalles" para todas las vacantes
+
+AHORA (Iteración 4):
+- Estado EXPIRED:
+  * Botón primario: "Renovar Vacante" → /recruiter/jobs/[id]/edit
+  * Botón secundario: "Ver Detalles" → /recruiter/jobs/[id]
+
+- Estado EXPIRING_SOON:
+  * Botón primario: "Extender Vigencia" → /recruiter/jobs/[id]/edit
+  * Botón secundario: "Ver Detalles" → /recruiter/jobs/[id]
+
+- Estado ACTIVE (o sin vigencia):
+  * Botón: "Ver Detalles" → /recruiter/jobs/[id]
+
+NOTA IMPORTANTE:
+- "Renovar" y "Extender Vigencia" NO implementan lógica especial
+- Son simplemente aliases visuales para "Editar vacante"
+- La "renovación" sigue siendo: editar la vacante y ajustar el slider de vigencia
+- El backend recalcula expiresAt desde HOY cuando se edita validityDays
+
+
+C) MENSAJES DE ADVERTENCIA MEJORADOS
+─────────────────────────────────────
+
+ANTES (Iteración 3):
+- Expired: "Esta vacante ya no se muestra a los candidatos"
+- Expiring Soon: "Tu vacante expira en X días. Actualízala o se desactivará"
+
+AHORA (Iteración 4):
+- Expired:
+  "Esta vacante ya no se muestra a los candidatos. Edita y renueva la vigencia si aún está disponible."
+  (Más accionable, sugiere qué hacer)
+
+- Expiring Soon:
+  "Tu vacante expira en X días. Si sigue abierta, actualiza la vigencia para que no desaparezca de los resultados."
+  (Más contextual, explica la consecuencia)
+
+- Active:
+  Sin mensaje (solo badge "📅 X días restantes")
+
+IMPLEMENTACIÓN:
+- Se modificó función getJobStatus() con nuevos textos
+- NO se cambió lógica de cálculo de daysLeft
+- NO se cambió clasificación de estados (expired/expiring_soon/active)
+
+
+D) LÓGICA DE NEGOCIO SIN CAMBIOS
+─────────────────────────────────
+
+MANTENIDO EXACTAMENTE IGUAL QUE ITERACIÓN 3/3.1:
+✅ Cálculo de daysLeft: Math.ceil((expiresAt - today) / milisegundos)
+✅ Estados:
+   - expired: daysLeft < 0
+   - expiring_soon: daysLeft >= 0 AND daysLeft <= 3
+   - active: daysLeft > 3 OR expiresAt = null
+✅ Badges visuales (colores, iconos)
+✅ Filtro de búsqueda para candidatos (no tocado)
+✅ Lógica de edición y recálculo de expires_at (no tocada)
+
+================================================================================
+2. RESUMEN DE CÁLCULO Y VISUALIZACIÓN
+================================================================================
+
+FLUJO DE INFORMACIÓN:
+
+1) fetchJobs() trae todas las vacantes del reclutador desde /api/recruiter/jobs
+
+2) Para cada vacante, se calcula getJobStatus(job):
+   - Si job.expiresAt = null → status: 'active', daysLeft: null
+   - Si job.expiresAt existe:
+     * daysLeft = Math.ceil((expiresAt - hoy) / milisegundos)
+     * Si daysLeft < 0 → 'expired'
+     * Si 0 <= daysLeft <= 3 → 'expiring_soon'
+     * Si daysLeft > 3 → 'active'
+
+3) getValidityAlerts() filtra vacantes:
+   - expired = jobs donde getJobStatus(job).status === 'expired'
+   - expiringSoon = jobs donde getJobStatus(job).status === 'expiring_soon'
+
+4) Renderizado de sección de avisos (top del dashboard):
+   - Si expired.length > 0 → Bloque rojo con lista de máx 3 expiradas
+   - Else si expiringSoon.length > 0 → Bloque naranja con lista de máx 3 por expirar
+   - Else → Bloque verde "Todo OK"
+
+5) Renderizado de cada card de vacante:
+   - Badges: Activa/Inactiva + (Expirada/Por expirar/X días restantes)
+   - Mensaje de advertencia si expired o expiring_soon
+   - Botones CTA según estado
+
+DATOS MOSTRADOS:
+
+N Vacantes Expiradas:
+- Cálculo: validityAlerts.expired.length
+- Mostradas: máximo 3 en bloque rojo
+- Para cada una: título, "Expirada hace X días", botón "Renovar"
+- X = abs(daysLeft) para las expiradas
+
+N Vacantes Por Expirar:
+- Cálculo: validityAlerts.expiringSoon.length
+- Mostradas: máximo 3 en bloque naranja
+- Para cada una: título, "Expira en X días", botón "Extender Vigencia"
+- X = daysLeft (0, 1, 2 o 3)
+
+Sin Problemas:
+- Condición: expired.length = 0 AND expiringSoon.length = 0
+- Mensaje: "Todas tus vacantes vigentes están dentro de su periodo..."
+
+================================================================================
+3. CONFIRMACIÓN: LÓGICA DE NEGOCIO NO MODIFICADA
+================================================================================
+
+NO SE TOCÓ:
+
+✅ Cálculo de expires_at en CreateJobPosting y UpdateJobPosting
+✅ Validación de validityDays (7-30 días)
+✅ Fórmula: expires_at = hoy + (validityDays * 24 * 60 * 60 * 1000)
+✅ Filtro en /api/jobs para buscadores: (expires_at IS NULL OR expires_at >= hoy)
+✅ Repositorio SupabaseJobPostingRepository (findAll, mapToEntity, create, update)
+✅ Migraciones de BD (20250123000003_add_job_validity_fields.sql)
+✅ Dominio JobPosting (expiresAt: Date | null, validityDays: number)
+✅ DTOs CreateJobPostingDTO y UpdateJobPostingDTO
+✅ Formularios de creación/edición (/recruiter/jobs/new, /recruiter/jobs/[id]/edit)
+
+SOLO SE MODIFICÓ:
+
+📝 src/app/recruiter/jobs/page.tsx:
+   - Textos de mensajes de advertencia (más claros)
+   - Agregada sección de avisos arriba del listado
+   - Agregados botones "Renovar" y "Extender Vigencia"
+   - Agregada función getValidityAlerts()
+
+================================================================================
+4. DEFINICIÓN DE INotificationService Y DummyNotificationService
+================================================================================
+
+PUERTO: src/ports/services/INotificationService.ts
+──────────────────────────────────────────────────
+
+Interfaz que define el contrato para servicios de notificación.
+
+Métodos:
+
+1) notifyJobExpiringSoon(userId, jobPostingId, daysLeft): Promise<void>
+   - Parámetros:
+     * userId: string - UUID del reclutador (Supabase Auth UID)
+     * jobPostingId: string - UUID de la vacante
+     * daysLeft: number - Días restantes (0-3)
+   - Propósito: Notificar que una vacante está por expirar
+   - TODO Iteración 5: Enviar email "Tu vacante [Título] expira en X días"
+
+2) notifyJobExpired(userId, jobPostingId): Promise<void>
+   - Parámetros:
+     * userId: string - UUID del reclutador
+     * jobPostingId: string - UUID de la vacante
+   - Propósito: Notificar que una vacante ha expirado
+   - TODO Iteración 5: Enviar email "Tu vacante [Título] ha expirado"
+
+Documentación incluye:
+- Ejemplos de uso
+- Plan de integración para Iteración 5 (3 opciones: Edge Functions, Vercel Cron, pg_cron)
+- Recomendación: Vercel Cron (más simple para empezar)
+
+
+IMPLEMENTACIÓN DUMMY: src/infrastructure/services/DummyNotificationService.ts
+─────────────────────────────────────────────────────────────────────────────
+
+Implementa INotificationService con lógica placeholder.
+
+Comportamiento actual:
+- notifyJobExpiringSoon() → console.log con formato estructurado
+- notifyJobExpired() → console.log con formato estructurado
+- Simula delay de red: await setTimeout(100ms)
+- NO envía emails reales
+- NO se llama automáticamente desde ningún CRON ni webhook
+
+Output de ejemplo:
+
+========================================
+[DUMMY NOTIFICATION] Vacante por expirar
+========================================
+Usuario:      uuid-reclutador
+Vacante ID:   uuid-vacante
+Días restantes: 2
+Acción:       Enviar email "Tu vacante expira pronto"
+TODO:         Implementar EmailNotificationService en Iteración 5
+========================================
+
+Uso:
+- Puede invocarse manualmente para testing/debugging
+- Se puede integrar en use cases si se desea logging
+- Listo para reemplazar con EmailNotificationService en Iteración 5
+
+================================================================================
+5. PLAN PARA ITERACIÓN 5 (EMAILS AUTOMÁTICOS)
+================================================================================
+
+OBJETIVO ITERACIÓN 5:
+Implementar envío automático de emails a reclutadores cuando sus vacantes
+estén por expirar o hayan expirado.
+
+OPCIÓN RECOMENDADA: Vercel Cron Jobs
+─────────────────────────────────────
+
+PASO 1: Crear API route para cron job
+--------------------------------------
+Archivo: src/app/api/cron/check-expiring-jobs/route.ts
+
+Lógica:
+1. Verificar header x-vercel-cron (seguridad)
+2. Consultar BD:
+   - Vacantes donde expires_at BETWEEN hoy AND hoy+3 días
+   - Vacantes donde expires_at = hoy-1 día (recién expiradas)
+3. Para cada vacante, verificar si ya se envió notificación (evitar duplicados)
+4. Llamar EmailNotificationService.notifyJobExpiringSoon() o notifyJobExpired()
+5. Guardar log de notificación enviada
+
+PASO 2: Configurar cron en vercel.json
+---------------------------------------
+{
+  "crons": [
+    {
+      "path": "/api/cron/check-expiring-jobs",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}
+
+Esto ejecuta el cron diariamente a las 9:00 AM (hora del servidor).
+
+PASO 3: Implementar EmailNotificationService
+---------------------------------------------
+Archivo: src/infrastructure/services/EmailNotificationService.ts
+
+Implementa INotificationService con:
+- Integración con Resend API, SendGrid o similar
+- Templates HTML para emails
+- Rate limiting (no enviar mismo email múltiples veces)
+- Manejo de errores y reintentos
+
+Ejemplo con Resend:
+```typescript
+import { Resend } from 'resend';
+
+export class EmailNotificationService implements INotificationService {
+  private resend = new Resend(process.env.RESEND_API_KEY);
+
+  async notifyJobExpiringSoon(userId, jobPostingId, daysLeft) {
+    // Obtener datos del usuario y vacante
+    const user = await getUserById(userId);
+    const job = await getJobById(jobPostingId);
+
+    await this.resend.emails.send({
+      from: 'MeetWork <noreply@meetwork.com>',
+      to: user.email,
+      subject: `Tu vacante "${job.title}" expira en ${daysLeft} días`,
+      html: renderExpiringSoonTemplate(job, daysLeft)
+    });
+  }
+}
+```
+
+PASO 4: Crear tabla de logs de notificaciones
+----------------------------------------------
+Migration: 20250XXX_create_notification_logs.sql
+
+```sql
+CREATE TABLE notification_logs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES auth.users(id),
+  job_posting_id UUID NOT NULL REFERENCES job_postings(id),
+  notification_type VARCHAR(50) NOT NULL, -- 'expiring_soon' | 'expired'
+  sent_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(job_posting_id, notification_type, sent_at::date)
+);
+```
+
+Esto evita enviar el mismo email varias veces el mismo día.
+
+PASO 5: Testing
+---------------
+1. Crear vacante de prueba con expires_at = hoy+2 días
+2. Esperar ejecución del cron (o llamar manualmente el endpoint)
+3. Verificar recepción de email
+4. Confirmar log en notification_logs
+
+ALTERNATIVAS:
+
+Opción B: Supabase Database Webhooks + Edge Functions
+- Ventaja: Reacción en tiempo real a cambios en BD
+- Desventaja: Más complejo de configurar y debuggear
+
+Opción C: Supabase pg_cron
+- Ventaja: Todo en BD, no depende de servidor externo
+- Desventaja: Requiere plan Pro de Supabase, menos flexible
+
+RECOMENDACIÓN FINAL:
+Empezar con Vercel Cron (Opción A). Es simple, debuggeable, y completamente
+controlado desde Next.js. Si crece mucho el volumen, migrar a sistema de colas.
+
+================================================================================
+6. GUÍA DE PRUEBAS MANUALES
+================================================================================
+
+CASO A: RECLUTADOR SIN VACANTES
+────────────────────────────────
+
+Pasos:
+1. Crear cuenta de reclutador nueva (sin vacantes)
+2. Navegar a /recruiter/jobs
+
+Resultado esperado:
+✅ NO se muestra sección de avisos
+✅ Se muestra card "No tienes vacantes publicadas"
+✅ Botón "Crear Primera Vacante"
+
+
+CASO B: RECLUTADOR SOLO CON VACANTES ACTIVAS (SIN PROBLEMAS)
+──────────────────────────────────────────────────────────────
+
+Setup:
+1. Crear 2-3 vacantes con vigencia de 15-30 días
+2. Asegurar que todas tienen expires_at > hoy+3 días
+
+Pasos:
+1. Navegar a /recruiter/jobs
+
+Resultado esperado:
+✅ Bloque verde: "Todas tus vacantes vigentes están dentro de su periodo..."
+✅ Cada card muestra:
+   - Badge "Activa" (verde)
+   - Badge "📅 X días restantes" (azul)
+   - SIN mensaje de advertencia
+   - Solo botón "Ver Detalles"
+
+
+CASO C: RECLUTADOR CON 1-2 VACANTES POR EXPIRAR
+────────────────────────────────────────────────
+
+Setup:
+1. En Supabase SQL Editor:
+   ```sql
+   UPDATE job_postings 
+   SET expires_at = CURRENT_DATE + INTERVAL '2 days',
+       validity_days = 2
+   WHERE id = 'uuid-vacante-1';
+
+   UPDATE job_postings 
+   SET expires_at = CURRENT_DATE + INTERVAL '1 day',
+       validity_days = 1
+   WHERE id = 'uuid-vacante-2';
+   ```
+
+Pasos:
+1. Navegar a /recruiter/jobs
+
+Resultado esperado:
+✅ Bloque naranja (top): "Vacantes Por Expirar"
+✅ Mensaje: "Tienes 2 vacantes que expiran en los próximos 3 días."
+✅ Lista muestra máximo 3 vacantes con:
+   - Título de la vacante
+   - "Expira en 2 días" / "Expira en 1 día"
+   - Botón "Extender Vigencia"
+✅ Cada card en el listado muestra:
+   - Badge "⚠️ Por expirar" (naranja)
+   - Mensaje naranja: "Tu vacante expira en X días. Si sigue abierta..."
+   - Botón primario "Extender Vigencia"
+   - Botón secundario "Ver Detalles"
+
+Verificar funcionalidad:
+1. Click en "Extender Vigencia" (desde bloque naranja o card)
+2. ✅ Redirige a /recruiter/jobs/[id]/edit
+3. Ajustar slider de vigencia a 20 días
+4. Guardar
+5. ✅ Volver a dashboard
+6. ✅ Vacante ahora muestra "📅 20 días restantes"
+7. ✅ Ya NO aparece en bloque naranja
+
+
+CASO D: RECLUTADOR CON VACANTES EXPIRADAS
+──────────────────────────────────────────
+
+Setup:
+1. En Supabase SQL Editor:
+   ```sql
+   UPDATE job_postings 
+   SET expires_at = CURRENT_DATE - INTERVAL '2 days',
+       validity_days = 7
+   WHERE id = 'uuid-vacante-1';
+
+   UPDATE job_postings 
+   SET expires_at = CURRENT_DATE - INTERVAL '5 days',
+       validity_days = 10
+   WHERE id = 'uuid-vacante-2';
+
+   UPDATE job_postings 
+   SET expires_at = CURRENT_DATE - INTERVAL '1 day',
+       validity_days = 7
+   WHERE id = 'uuid-vacante-3';
+   ```
+
+Pasos:
+1. Navegar a /recruiter/jobs
+
+Resultado esperado:
+✅ Bloque rojo (top): "Vacantes Expiradas"
+✅ Mensaje: "Tienes 3 vacantes expiradas que ya no se muestran a los candidatos."
+✅ Lista muestra máximo 3 con:
+   - Título de la vacante
+   - "Expirada hace 2 días" / "Expirada hace 5 días" / "Expirada hace 1 día"
+   - Botón "Renovar"
+✅ Si hubiera 4+ expiradas: "+ X vacante(s) expirada(s) más"
+
+✅ Cada card en el listado muestra:
+   - Badge "🔴 Expirada" (rojo)
+   - Mensaje rojo: "Esta vacante ya no se muestra... Edita y renueva..."
+   - Botón primario "Renovar Vacante"
+   - Botón secundario "Ver Detalles"
+
+Verificar funcionalidad:
+1. Click en "Renovar" (desde bloque rojo o card)
+2. ✅ Redirige a /recruiter/jobs/[id]/edit
+3. Ajustar slider de vigencia a 15 días
+4. Guardar
+5. ✅ Volver a dashboard
+6. ✅ Vacante ahora muestra "📅 15 días restantes"
+7. ✅ Ya NO aparece en bloque rojo
+8. ✅ expires_at se recalculó desde HOY (no desde fecha original)
+
+Verificar filtrado para candidatos:
+1. Navegar a /jobs (búsqueda pública)
+2. ✅ Las vacantes expiradas NO aparecen en resultados
+3. Renovar una vacante (ajustar vigencia)
+4. Refrescar /jobs
+5. ✅ Ahora SÍ aparece en resultados
+
+
+CASO E: CONFIRMAR QUE BOTONES LLEVAN A EDICIÓN CORRECTA
+────────────────────────────────────────────────────────
+
+Pasos:
+1. Desde dashboard, click en "Renovar Vacante" de una expirada
+2. ✅ URL: /recruiter/jobs/[id-correcto]/edit
+3. ✅ Formulario carga datos de la vacante correcta
+4. ✅ Slider de vigencia muestra valor actual o default 30
+
+5. Volver a dashboard, click en "Extender Vigencia" de una por expirar
+6. ✅ URL: /recruiter/jobs/[id-correcto]/edit
+7. ✅ Formulario carga datos correctos
+
+8. Volver a dashboard, click en "Ver Detalles" de cualquier vacante
+9. ✅ URL: /recruiter/jobs/[id-correcto]
+10. ✅ Vista de detalle muestra información completa
+
+
+CASO F: PRIORIDAD DE BLOQUES DE AVISOS
+───────────────────────────────────────
+
+Setup:
+1. Tener 2 vacantes expiradas
+2. Tener 1 vacante por expirar
+
+Resultado esperado:
+✅ Solo se muestra bloque rojo (expiradas)
+✅ NO se muestra bloque naranja (aunque haya vacantes por expirar)
+✅ Lógica: Prioridad ALTA (expired) > MEDIA (expiring_soon) > BAJA (all_ok)
+
+Verificar:
+1. Renovar las 2 expiradas
+2. Refrescar dashboard
+3. ✅ Ahora SÍ se muestra bloque naranja (por expirar)
+
+4. Extender vigencia de la que estaba por expirar
+5. Refrescar dashboard
+6. ✅ Ahora se muestra bloque verde (todo OK)
+
+================================================================================
+7. RESUMEN FINAL
+================================================================================
+
+ARCHIVOS CREADOS:
+─────────────────
+✅ src/ports/services/INotificationService.ts (79 líneas)
+   - Puerto hexagonal para servicio de notificaciones
+   - Métodos: notifyJobExpiringSoon, notifyJobExpired
+   - Documentación completa con plan de integración
+
+✅ src/infrastructure/services/DummyNotificationService.ts (68 líneas)
+   - Implementación dummy de INotificationService
+   - Solo console.log, NO envía emails reales
+   - Listo para reemplazar con EmailNotificationService
+
+ARCHIVOS MODIFICADOS:
+─────────────────────
+✅ src/app/recruiter/jobs/page.tsx
+   - Agregada función getValidityAlerts()
+   - Agregada sección de avisos (bloques rojo/naranja/verde)
+   - Mejorados mensajes de advertencia (más claros)
+   - Agregados botones CTA: "Renovar Vacante", "Extender Vigencia"
+   - Renderizado condicional según prioridad de avisos
+
+ARCHIVOS NO TOCADOS:
+────────────────────
+✅ Migraciones de BD (Iteración 3)
+✅ Dominio JobPosting (Iteración 3.1)
+✅ DTOs CreateJobPostingDTO, UpdateJobPostingDTO (Iteración 3.1)
+✅ Use cases CreateJobPosting, UpdateJobPosting (Iteración 3.1)
+✅ Repository SupabaseJobPostingRepository (Iteración 3.1)
+✅ Formularios /recruiter/jobs/new y /recruiter/jobs/[id]/edit (Iteración 3)
+✅ Búsqueda pública /jobs y /api/jobs (Iteración 3.1)
+✅ KYC, Términos, Seguridad (Iteraciones 1 y 2)
+
+LÓGICA DE NEGOCIO SIN CAMBIOS:
+───────────────────────────────
+✅ Cálculo de expires_at: hoy + (validityDays * 86400000 ms)
+✅ Validación de validityDays: 7-30 días
+✅ Estados: expired (< 0), expiring_soon (0-3), active (> 3 o null)
+✅ Filtro para candidatos: (expires_at IS NULL OR expires_at >= hoy)
+✅ Recálculo desde HOY al editar validityDays
+
+FUNCIONALIDAD AGREGADA:
+───────────────────────
+✅ Bloque rojo: Vacantes expiradas (muestra max 3, prioridad ALTA)
+✅ Bloque naranja: Vacantes por expirar (muestra max 3, prioridad MEDIA)
+✅ Bloque verde: Todo OK (prioridad BAJA)
+✅ Botón "Renovar Vacante" para expiradas → edición
+✅ Botón "Extender Vigencia" para por expirar → edición
+✅ Mensajes mejorados y más accionables
+✅ Interface INotificationService (ready para Iteración 5)
+✅ DummyNotificationService (placeholder para testing)
+
+PRÓXIMOS PASOS (ITERACIÓN 5):
+──────────────────────────────
+1. Implementar EmailNotificationService con Resend/SendGrid
+2. Crear API route /api/cron/check-expiring-jobs
+3. Configurar Vercel Cron en vercel.json (diario 9:00 AM)
+4. Crear tabla notification_logs para evitar duplicados
+5. Diseñar templates HTML para emails
+6. Testing completo de flujo de emails automáticos
+
+NOTAS TÉCNICAS:
+───────────────
+- getValidityAlerts() NO hace queries adicionales (reutiliza datos cargados)
+- Prioridad de bloques: expired > expiring_soon > all_ok
+- Botones "Renovar/Extender" son aliases de "Editar" (sin lógica nueva)
+- Recálculo de expires_at siempre desde HOY (no extiende desde fecha original)
+- Sección de avisos solo se muestra si hay jobs (no en estado vacío)
+
+================================================================================
+FIN DEL RESUMEN - ITERACIÓN 4
+================================================================================

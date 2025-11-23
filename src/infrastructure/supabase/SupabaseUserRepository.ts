@@ -19,6 +19,9 @@ export class SupabaseUserRepository implements IUserRepository {
             email: data.email,
             role: data.role as UserRole,
             createdAt: new Date(data.created_at),
+            termsAccepted: data.terms_accepted || false,
+            termsAcceptedAt: data.terms_accepted_at ? new Date(data.terms_accepted_at) : undefined,
+            termsVersion: data.terms_version || undefined,
         };
     }
 
@@ -38,6 +41,9 @@ export class SupabaseUserRepository implements IUserRepository {
             email: data.email,
             role: data.role as UserRole,
             createdAt: new Date(data.created_at),
+            termsAccepted: data.terms_accepted || false,
+            termsAcceptedAt: data.terms_accepted_at ? new Date(data.terms_accepted_at) : undefined,
+            termsVersion: data.terms_version || undefined,
         };
     }
 
@@ -60,6 +66,9 @@ export class SupabaseUserRepository implements IUserRepository {
             email: data.email,
             role: data.role as UserRole,
             createdAt: new Date(data.created_at),
+            termsAccepted: data.terms_accepted || false,
+            termsAcceptedAt: data.terms_accepted_at ? new Date(data.terms_accepted_at) : undefined,
+            termsVersion: data.terms_version || undefined,
         };
     }
 

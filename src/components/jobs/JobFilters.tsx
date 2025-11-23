@@ -41,7 +41,12 @@ export function JobFilters({ onFilterChange }: JobFiltersProps) {
     const handleChange = (field: keyof FilterValues, value: string) => {
         const newFilters = { ...filters, [field]: value };
         setFilters(newFilters);
-        onFilterChange(newFilters);
+        // Ya no aplicamos filtros automáticamente
+    };
+
+    const handleSearch = () => {
+        // Aplicar filtros solo cuando se presiona el botón
+        onFilterChange(filters);
     };
 
     const handleReset = () => {
@@ -59,13 +64,16 @@ export function JobFilters({ onFilterChange }: JobFiltersProps) {
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-md border border-neutral-200 p-6 mb-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="bg-white rounded-lg shadow-md border border-neutral-200 p-4 md:p-6 mb-6">
+            <h2 className="text-lg font-semibold text-neutral-900 mb-4 md:hidden">Filtros de Búsqueda</h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                 <Input
                     label="Buscar"
-                    placeholder="Puesto, empresa, palabras clave..."
+                    placeholder="Puesto, empresa..."
                     value={filters.searchText}
                     onChange={(e) => handleChange('searchText', e.target.value)}
+                    className="text-base"
                 />
 
                 <Input
@@ -73,6 +81,7 @@ export function JobFilters({ onFilterChange }: JobFiltersProps) {
                     placeholder="Ciudad, estado..."
                     value={filters.location}
                     onChange={(e) => handleChange('location', e.target.value)}
+                    className="text-base"
                 />
 
                 <Input
@@ -81,16 +90,7 @@ export function JobFilters({ onFilterChange }: JobFiltersProps) {
                     placeholder="Ej: 12000"
                     value={filters.minSalary}
                     onChange={(e) => handleChange('minSalary', e.target.value)}
-                />
-
-                <Select
-                    label="Sector Industrial"
-                    value={filters.industrialSector}
-                    onChange={(e) => handleChange('industrialSector', e.target.value)}
-                    options={[
-                        { value: '', label: 'Todos los sectores' },
-                        ...INDUSTRY_SECTORS.map(sector => ({ value: sector, label: sector })),
-                    ]}
+                    className="text-base"
                 />
 
                 <Select
@@ -101,6 +101,7 @@ export function JobFilters({ onFilterChange }: JobFiltersProps) {
                         { value: '', label: 'Todas las áreas' },
                         ...JOB_AREAS.map(area => ({ value: area, label: area })),
                     ]}
+                    className="text-base"
                 />
 
                 <Select
@@ -109,24 +110,28 @@ export function JobFilters({ onFilterChange }: JobFiltersProps) {
                     onChange={(e) => handleChange('contractType', e.target.value as ContractType | '')}
                     options={[
                         { value: '', label: 'Todos los tipos' },
-                        ...Object.entries(CONTRACT_TYPES).map(([key, label]) => ({ value: key, label })),
+                        ...CONTRACT_TYPES.map(type => ({ value: type, label: type })),
                     ]}
-                />
-
-                <Select
-                    label="Modalidad"
-                    value={filters.modality}
-                    onChange={(e) => handleChange('modality', e.target.value as Modality | '')}
-                    options={[
-                        { value: '', label: 'Todas las modalidades' },
-                        ...Object.entries(MODALITIES).map(([key, label]) => ({ value: key, label })),
-                    ]}
+                    className="text-base"
                 />
             </div>
 
-            <div className="mt-4 flex justify-end">
-                <Button variant="ghost" size="sm" onClick={handleReset}>
+            <div className="mt-4 flex flex-col sm:flex-row justify-between gap-2 sm:gap-3">
+                <Button
+                    variant="ghost"
+                    size="md"
+                    onClick={handleReset}
+                    className="w-full sm:w-auto order-2 sm:order-1"
+                >
                     Limpiar Filtros
+                </Button>
+                <Button
+                    variant="primary"
+                    size="md"
+                    onClick={handleSearch}
+                    className="w-full sm:w-auto order-1 sm:order-2 text-base py-3"
+                >
+                    🔍 Buscar
                 </Button>
             </div>
         </div>

@@ -6,73 +6,62 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
+import { JOB_AREAS, CONTRACT_TYPES, SHIFTS } from '@/lib/constants';
 
 const INDUSTRIAL_SECTORS = [
     'Construcción',
-    'Logística y Transporte',
-    'Manufactura',
-    'Energía',
-    'Minería',
-    'Agricultura y Agroindustria',
-    'Petróleo y Gas',
-    'Automotriz',
-    'Alimentaria',
-    'Química y Farmacéutica',
-];
-
-const JOB_AREAS = [
-    'Operaciones',
-    'Producción',
-    'Mantenimiento',
-    'Calidad',
-    'Supervisión',
-    'Almacén',
-    'Logística',
-    'Seguridad',
-    'Administración',
-    'Técnico',
-];
-
-const CONTRACT_TYPES = [
-    'Tiempo Completo',
-    'Medio Tiempo',
-    'Por Proyecto',
-    'Temporal',
-    'Prácticas',
 ];
 
 const MODALITIES = [
     'Presencial',
-    'Remoto',
-    'Híbrido',
-];
-
-const SHIFTS = [
-    'Diurno',
-    'Nocturno',
-    'Mixto',
-    'Rotativo',
 ];
 
 export default function CreateJobPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [tasks, setTasks] = useState<string[]>(['']);
+    const [sameLocation, setSameLocation] = useState(false);
     const [formData, setFormData] = useState({
         title: '',
         companyName: '',
         location: '',
-        industrialSector: '',
+        industrialSector: 'Construcción',
         jobArea: '',
         contractType: '',
-        modality: '',
-        salaryRange: '',
+        modality: 'Presencial',
+        salaryMin: '',
+        salaryMax: '',
         shift: '',
         descriptionShort: '',
         descriptionLong: '',
         contactPhone: '',
         contactEmail: '',
+        // Iteración 2: Datos de seguridad
+        companyRfc: '',
+        companyLocation: '',
+        worksiteLocation: '',
+        worksiteGoogleMapsUrl: '',
+        contractorPhoneWhatsapp: '',
+        companyPhone: '',
+        startDate: '',
+        // Iteración 3: Vigencia
+        validityDays: 30,
     });
+
+    const addTask = () => {
+        setTasks([...tasks, '']);
+    };
+
+    const removeTask = (index: number) => {
+        setTasks(tasks.filter((_, i) => i !== index));
+    };
+
+    const updateTask = (index: number, value: string) => {
+        const newTasks = [...tasks];
+        newTasks[index] = value;
+        setTasks(newTasks);
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -80,10 +69,35 @@ export default function CreateJobPage() {
         setLoading(true);
 
         try {
+            // Convertir tareas a formato de lista
+            const tasksList = tasks
+                .filter(task => task.trim())
+                .map(task => `• ${task}`)
+                .join('\n');
+
+            // Construir el rango salarial
+            const salaryRange = formData.salaryMin && formData.salaryMax
+                ? `$${formData.salaryMin} - $${formData.salaryMax} MXN`
+                : formData.salaryMin
+                    ? `Desde $${formData.salaryMin} MXN`
+                    : formData.salaryMax
+                        ? `Hasta $${formData.salaryMax} MXN`
+                        : 'A convenir';
+
+            const dataToSubmit = {
+                ...formData,
+                descriptionLong: tasksList,
+                salaryRange,
+                // Convertir startDate a objeto Date
+                startDate: formData.startDate ? new Date(formData.startDate) : new Date(),
+                // Iteración 3: validityDays ya viene como número del slider
+                validityDays: formData.validityDays,
+            };
+
             const response = await fetch('/api/recruiter/jobs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData),
+                body: JSON.stringify(dataToSubmit),
             });
 
             const data = await response.json();
@@ -102,20 +116,20 @@ export default function CreateJobPage() {
     };
 
     return (
-        <div className="container mx-auto px-4 py-16">
+        <div className="container mx-auto px-4 py-6 md:py-16">
             <div className="max-w-3xl mx-auto">
                 <Card>
                     <CardHeader>
-                        <h1 className="text-3xl font-heading font-bold text-neutral-900">
+                        <h1 className="text-xl md:text-3xl font-heading font-bold text-neutral-900">
                             Crear Nueva Vacante
                         </h1>
-                        <p className="text-neutral-600 mt-2">
+                        <p className="text-sm md:text-base text-neutral-600 mt-2">
                             Completa la información de la vacante que deseas publicar
                         </p>
                     </CardHeader>
                     <CardContent>
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <div className="grid md:grid-cols-2 gap-6">
+                        <form onSubmit={handleSubmit} className="space-y-5 md:space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                                 <div className="md:col-span-2">
                                     <Input
                                         label="Título del Puesto *"
@@ -124,6 +138,7 @@ export default function CreateJobPage() {
                                         onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                                         required
                                         placeholder="Ej: Operador de Maquinaria Industrial"
+                                        className="text-base"
                                     />
                                 </div>
 
@@ -134,6 +149,7 @@ export default function CreateJobPage() {
                                     onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                                     required
                                     placeholder="Ej: Industrias del Norte SA"
+                                    className="text-base"
                                 />
 
                                 <Input
@@ -143,27 +159,15 @@ export default function CreateJobPage() {
                                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                                     required
                                     placeholder="Ej: Monterrey, Nuevo León"
+                                    className="text-base"
                                 />
-
-                                <Select
-                                    label="Sector Industrial *"
-                                    value={formData.industrialSector}
-                                    onChange={(e) => setFormData({ ...formData, industrialSector: e.target.value })}
-                                    required
-                                >
-                                    <option value="">Selecciona un sector</option>
-                                    {INDUSTRIAL_SECTORS.map((sector) => (
-                                        <option key={sector} value={sector}>
-                                            {sector}
-                                        </option>
-                                    ))}
-                                </Select>
 
                                 <Select
                                     label="Área de Trabajo *"
                                     value={formData.jobArea}
                                     onChange={(e) => setFormData({ ...formData, jobArea: e.target.value })}
                                     required
+                                    className="text-base"
                                 >
                                     <option value="">Selecciona un área</option>
                                     {JOB_AREAS.map((area) => (
@@ -178,6 +182,7 @@ export default function CreateJobPage() {
                                     value={formData.contractType}
                                     onChange={(e) => setFormData({ ...formData, contractType: e.target.value })}
                                     required
+                                    className="text-base"
                                 >
                                     <option value="">Selecciona tipo</option>
                                     {CONTRACT_TYPES.map((type) => (
@@ -187,34 +192,41 @@ export default function CreateJobPage() {
                                     ))}
                                 </Select>
 
-                                <Select
-                                    label="Modalidad *"
-                                    value={formData.modality}
-                                    onChange={(e) => setFormData({ ...formData, modality: e.target.value })}
-                                    required
-                                >
-                                    <option value="">Selecciona modalidad</option>
-                                    {MODALITIES.map((mod) => (
-                                        <option key={mod} value={mod}>
-                                            {mod}
-                                        </option>
-                                    ))}
-                                </Select>
-
-                                <Input
-                                    label="Rango Salarial *"
-                                    type="text"
-                                    value={formData.salaryRange}
-                                    onChange={(e) => setFormData({ ...formData, salaryRange: e.target.value })}
-                                    required
-                                    placeholder="Ej: $12,000 - $15,000 MXN"
-                                />
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-neutral-700 mb-2">
+                                        Rango Salarial Mensual *
+                                    </label>
+                                    <div className="grid grid-cols-2 gap-3 md:gap-4">
+                                        <Input
+                                            label="Salario Mínimo"
+                                            type="number"
+                                            value={formData.salaryMin}
+                                            onChange={(e) => setFormData({ ...formData, salaryMin: e.target.value })}
+                                            placeholder="Ej: 12000"
+                                            min="0"
+                                            className="text-base"
+                                        />
+                                        <Input
+                                            label="Salario Máximo"
+                                            type="number"
+                                            value={formData.salaryMax}
+                                            onChange={(e) => setFormData({ ...formData, salaryMax: e.target.value })}
+                                            placeholder="Ej: 15000"
+                                            min="0"
+                                            className="text-base"
+                                        />
+                                    </div>
+                                    <p className="text-xs text-neutral-500 mt-1">
+                                        Ingresa el rango salarial mensual en pesos mexicanos (MXN)
+                                    </p>
+                                </div>
 
                                 <Select
                                     label="Turno *"
                                     value={formData.shift}
                                     onChange={(e) => setFormData({ ...formData, shift: e.target.value })}
                                     required
+                                    className="text-base"
                                 >
                                     <option value="">Selecciona turno</option>
                                     {SHIFTS.map((shift) => (
@@ -236,28 +248,234 @@ export default function CreateJobPage() {
                                     placeholder="Descripción breve de la vacante (máx. 200 caracteres)"
                                     maxLength={200}
                                     rows={2}
-                                    className="w-full px-3 py-2 border border-neutral-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                                    className="w-full px-3 py-2 text-base border border-neutral-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                                 />
                                 <p className="text-xs text-neutral-500">
                                     {formData.descriptionShort.length}/200 caracteres
                                 </p>
                             </div>
 
-                            <div className="space-y-2">
+                            <div className="space-y-3 md:space-y-4">
                                 <label className="block text-sm font-medium text-neutral-700">
-                                    Descripción Completa *
+                                    Responsabilidades y Tareas del Puesto *
                                 </label>
-                                <textarea
-                                    value={formData.descriptionLong}
-                                    onChange={(e) => setFormData({ ...formData, descriptionLong: e.target.value })}
-                                    required
-                                    placeholder="Descripción detallada: responsabilidades, requisitos, beneficios..."
-                                    rows={8}
-                                    className="w-full px-3 py-2 border border-neutral-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
-                                />
+                                <p className="text-xs text-neutral-500">
+                                    Agrega las tareas y responsabilidades principales del puesto (una por línea)
+                                </p>
+
+                                {tasks.map((task, index) => (
+                                    <div key={index} className="flex gap-2">
+                                        <Input
+                                            type="text"
+                                            value={task}
+                                            onChange={(e) => updateTask(index, e.target.value)}
+                                            placeholder={`Tarea ${index + 1}: Ej: Operar maquinaria pesada siguiendo normas de seguridad`}
+                                            className="flex-1 text-base"
+                                        />
+                                        {tasks.length > 1 && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                onClick={() => removeTask(index)}
+                                                className="text-red-600 hover:text-red-700 px-3"
+                                            >
+                                                ✕
+                                            </Button>
+                                        )}
+                                    </div>
+                                ))}
+
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={addTask}
+                                    className="w-full py-3 text-base"
+                                >
+                                    + Agregar otra tarea
+                                </Button>
                             </div>
 
-                            <div className="grid md:grid-cols-2 gap-6">
+                            {/* Iteración 2: Sección de Datos de Seguridad */}
+                            <div className="border-t pt-6 mt-6">
+                                <h3 className="text-lg font-semibold text-neutral-900 mb-4">
+                                    📋 Datos de Seguridad de la Vacante
+                                </h3>
+                                <p className="text-sm text-neutral-600 mb-6">
+                                    Esta información genera confianza en los candidatos y mejora la calidad de las aplicaciones
+                                </p>
+
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <Input
+                                            label="RFC de la Empresa *"
+                                            type="text"
+                                            value={formData.companyRfc}
+                                            onChange={(e) => setFormData({ ...formData, companyRfc: e.target.value.toUpperCase() })}
+                                            required
+                                            placeholder="Ej: ABC123456XXX"
+                                            maxLength={13}
+                                            className="text-base"
+                                        />
+
+                                        <Input
+                                            label="Teléfono de la Empresa *"
+                                            type="tel"
+                                            value={formData.companyPhone}
+                                            onChange={(e) => setFormData({ ...formData, companyPhone: e.target.value })}
+                                            required
+                                            placeholder="Ej: +52 81 1234 5678"
+                                            className="text-base"
+                                        />
+                                    </div>
+
+                                    <Input
+                                        label="Ubicación de la Empresa *"
+                                        type="text"
+                                        value={formData.companyLocation}
+                                        onChange={(e) => setFormData({ ...formData, companyLocation: e.target.value })}
+                                        required
+                                        placeholder="Ej: Monterrey, Nuevo León"
+                                        className="text-base"
+                                    />
+
+                                    <Input
+                                        label="Ubicación de la Obra / Sitio de Trabajo *"
+                                        type="text"
+                                        value={formData.worksiteLocation}
+                                        onChange={(e) => setFormData({ ...formData, worksiteLocation: e.target.value })}
+                                        required
+                                        placeholder="Ej: San Pedro Garza García, N.L."
+                                        className="text-base"
+                                    />
+
+                                    <label className="flex items-center gap-2 text-sm text-neutral-700">
+                                        <input
+                                            type="checkbox"
+                                            checked={sameLocation}
+                                            onChange={(e) => {
+                                                setSameLocation(e.target.checked);
+                                                if (e.target.checked) {
+                                                    setFormData({ ...formData, worksiteLocation: formData.companyLocation });
+                                                }
+                                            }}
+                                            className="rounded border-neutral-300"
+                                        />
+                                        La obra está en la misma ubicación que la empresa
+                                    </label>
+
+                                    <Input
+                                        label={`Link de Google Maps del Sitio de Trabajo ${formData.modality === 'Remoto' ? '(opcional)' : '*'}`}
+                                        type="url"
+                                        value={formData.worksiteGoogleMapsUrl}
+                                        onChange={(e) => setFormData({ ...formData, worksiteGoogleMapsUrl: e.target.value })}
+                                        required={formData.modality !== 'Remoto'}
+                                        placeholder="Ej: https://maps.app.goo.gl/..."
+                                        className="text-base"
+                                    />
+                                    <p className="text-xs text-neutral-500 -mt-2">
+                                        Copia el enlace desde Google Maps para que los candidatos puedan verificar la ubicación
+                                    </p>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <Input
+                                            label="WhatsApp del Contratante *"
+                                            type="tel"
+                                            value={formData.contractorPhoneWhatsapp}
+                                            onChange={(e) => setFormData({ ...formData, contractorPhoneWhatsapp: e.target.value })}
+                                            required
+                                            placeholder="Ej: +52 81 9876 5432"
+                                            className="text-base"
+                                        />
+
+                                        <Input
+                                            label="Fecha de Inicio de Actividades *"
+                                            type="date"
+                                            value={formData.startDate}
+                                            onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                                            required
+                                            className="text-base"
+                                            min={new Date().toISOString().split('T')[0]}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Iteración 3: Vigencia y urgencia */}
+                            <div className="bg-orange-50 rounded-lg p-4 md:p-6 border border-orange-200">
+                                <div>
+                                    <div className="flex items-start mb-3">
+                                        <span className="text-2xl mr-2">⏱</span>
+                                        <div className="flex-1">
+                                            <h3 className="text-lg font-semibold text-neutral-800">
+                                                Duración y nivel de urgencia
+                                            </h3>
+                                            <p className="text-sm text-neutral-600 mt-1">
+                                                Elige cuántos días estará activa tu vacante. Las vacantes urgentes reciben más visibilidad.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-neutral-700 mb-2">
+                                                Vigencia de la vacante: {formData.validityDays} días
+                                            </label>
+                                            <input
+                                                type="range"
+                                                min="7"
+                                                max="30"
+                                                step="1"
+                                                value={formData.validityDays}
+                                                onChange={(e) => setFormData({ ...formData, validityDays: parseInt(e.target.value) })}
+                                                className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-accent"
+                                            />
+                                            <div className="flex justify-between text-xs text-neutral-500 mt-1">
+                                                <span>7 días</span>
+                                                <span>30 días</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="bg-white p-3 rounded border border-neutral-200">
+                                                <p className="text-sm font-medium text-neutral-700">
+                                                    Nivel de urgencia:
+                                                </p>
+                                                <p className={`text-lg font-bold mt-1 ${formData.validityDays <= 10
+                                                    ? 'text-red-600'
+                                                    : formData.validityDays <= 20
+                                                        ? 'text-yellow-600'
+                                                        : 'text-green-600'
+                                                    }`}>
+                                                    {formData.validityDays <= 10
+                                                        ? '🔴 Alta'
+                                                        : formData.validityDays <= 20
+                                                            ? '🟡 Media'
+                                                            : '🟢 Baja'}
+                                                </p>
+                                            </div>
+
+                                            <div className="bg-white p-3 rounded border border-neutral-200">
+                                                <p className="text-sm font-medium text-neutral-700">
+                                                    Activa hasta:
+                                                </p>
+                                                <p className="text-lg font-bold text-neutral-800 mt-1">
+                                                    {new Date(Date.now() + formData.validityDays * 24 * 60 * 60 * 1000).toLocaleDateString('es-MX', {
+                                                        day: 'numeric',
+                                                        month: 'long',
+                                                        year: 'numeric'
+                                                    })}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-xs text-neutral-600 italic">
+                                            💡 Tip: Las vacantes con urgencia alta (7-10 días) aparecen destacadas para los candidatos.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                                 <Input
                                     label="Teléfono de Contacto *"
                                     type="tel"
@@ -265,6 +483,7 @@ export default function CreateJobPage() {
                                     onChange={(e) => setFormData({ ...formData, contactPhone: e.target.value })}
                                     required
                                     placeholder="Ej: +52 81 1234 5678"
+                                    className="text-base"
                                 />
 
                                 <Input
@@ -274,6 +493,7 @@ export default function CreateJobPage() {
                                     onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
                                     required
                                     placeholder="Ej: reclutamiento@empresa.com"
+                                    className="text-base"
                                 />
                             </div>
 
@@ -283,11 +503,11 @@ export default function CreateJobPage() {
                                 </div>
                             )}
 
-                            <div className="flex gap-4">
+                            <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
                                 <Button
                                     type="button"
                                     variant="ghost"
-                                    className="flex-1"
+                                    className="w-full sm:flex-1 py-3 text-base font-medium"
                                     onClick={() => router.back()}
                                     disabled={loading}
                                 >
@@ -296,7 +516,7 @@ export default function CreateJobPage() {
                                 <Button
                                     type="submit"
                                     variant="primary"
-                                    className="flex-1"
+                                    className="w-full sm:flex-1 py-3 text-base font-medium"
                                     disabled={loading}
                                 >
                                     {loading ? 'Publicando...' : 'Publicar Vacante'}

@@ -14,6 +14,16 @@ export interface CreateJobPostingDTO {
     descriptionLong?: string;
     contactPhone: string;
     contactEmail: string;
+    // Iteración 2: Datos de seguridad
+    companyRfc: string;
+    companyLocation: string;
+    worksiteLocation: string;
+    worksiteGoogleMapsUrl?: string;
+    contractorPhoneWhatsapp: string;
+    companyPhone: string;
+    startDate: Date;
+    // Iteración 3.1: Vigencia
+    validityDays: number;
 }
 
 export interface UpdateJobPostingDTO {
@@ -31,4 +41,14 @@ export interface UpdateJobPostingDTO {
     contactPhone?: string;
     contactEmail?: string;
     isActive?: boolean;
+    // Iteración 2: Datos de seguridad
+    companyRfc?: string;
+    companyLocation?: string;
+    worksiteLocation?: string;
+    worksiteGoogleMapsUrl?: string;
+    contractorPhoneWhatsapp?: string;
+    companyPhone?: string;
+    startDate?: Date;
+    // Iteración 3.1: Vigencia
+    validityDays?: number;
 }

@@ -37,3 +37,11 @@ export function CardFooter({ children, className }: CardProps) {
         </div>
     );
 }
+
+export function CardTitle({ children, className }: CardProps) {
+    return (
+        <h2 className={cn('text-xl font-semibold text-neutral-900', className)}>
+            {children}
+        </h2>
+    );
+}

@@ -7,8 +7,8 @@ import '@/styles/globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-    title: 'Meetwork Light - Conectando Talento Industrial',
-    description: 'Plataforma de vacantes y búsqueda de empleo para el sector industrial en México',
+    title: 'Meetwork Light - Empleos en Construcción',
+    description: 'Plataforma de vacantes y búsqueda de empleo para el sector de la construcción en México',
 };
 
 export default function RootLayout({

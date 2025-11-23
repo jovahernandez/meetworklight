@@ -1,0 +1,477 @@
+================================================================================
+  ITERACIÓN 3.1: Ajustes de Vigencia y Correcciones
+  Fecha: 23 de enero de 2025
+================================================================================
+
+OBJETIVO:
+Corregir detalles de la Iteración 3 (vigencia de vacantes) sin refactorizar.
+Específicamente:
+1. Usar is_active (BOOLEAN) en lugar de status.
+2. Manejar correctamente expiresAt como null para vacantes viejas.
+3. No inventar fechas de expiración para vacantes sin expires_at en BD.
+
+NO se movieron carpetas, NO se renombraron archivos, NO se tocó KYC/Terms/Seguridad.
+SOLO se corrigieron los filtros y el manejo de null en vigencia.
+
+================================================================================
+1. CONFIRMACIÓN: USO DE is_active EN LUGAR DE status
+================================================================================
+
+PROBLEMA CORREGIDO:
+- La Iteración 3 mencionaba filtros tipo `status = 'active'`.
+- El schema real usa `is_active BOOLEAN`, no una columna status.
+
+CAMBIOS REALIZADOS:
+
+A) En SupabaseJobPostingRepository.findAll():
+
+ANTES (incorrecto):
+```typescript
+if (filters?.isActive !== undefined) {
+    query = query.eq('status', filters.isActive ? 'active' : 'inactive');
+} else {
+    query = query.eq('status', 'active');
+}
+```
+
+AHORA (correcto):
+```typescript
+// Iteración 3.1: Usar is_active (BOOLEAN) en lugar de status
+if (filters?.isActive !== undefined) {
+    query = query.eq('is_active', filters.isActive);
+} else {
+    // By default, only show active jobs
+    query = query.eq('is_active', true);
+}
+
+// Iteración 3.1: Filtrar vacantes expiradas (solo para buscadores)
+const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+query = query.or(`expires_at.is.null,expires_at.gte.${today}`);
+```
+
+B) En SupabaseJobPostingRepository.mapToEntity():
+
+ANTES (incorrecto):
+```typescript
+isActive: data.status === 'active',
+```
+
+AHORA (correcto):
+```typescript
+isActive: data.is_active ?? false, // Iteración 3.1: usar is_active BOOLEAN
+```
+
+C) En SupabaseJobPostingRepository.create():
+
+ANTES (incorrecto):
+```typescript
+status: 'active',
+```
+
+AHORA (correcto):
+```typescript
+is_active: true, // Iteración 3.1: usar is_active BOOLEAN
+```
+
+D) En SupabaseJobPostingRepository.update():
+
+ANTES (incorrecto):
+```typescript
+if (params.isActive !== undefined) updateData.status = params.isActive ? 'active' : 'inactive';
+```
+
+AHORA (correcto):
+```typescript
+if (params.isActive !== undefined) updateData.is_active = params.isActive;
+```
+
+RESULTADO:
+- Todas las queries ahora usan `is_active = true` (BOOLEAN).
+- El filtro de vigencia es: `(expires_at IS NULL OR expires_at >= hoy)`.
+- NO se usa ninguna columna `status` en el flujo de vacantes.
+
+================================================================================
+2. MANEJO CORRECTO DE expiresAt PARA VACANTES VIEJAS
+================================================================================
+
+PROBLEMA CORREGIDO:
+- El mapper original inventaba una fecha (today + 30 días) para vacantes sin expires_at.
+- Esto mentía al usuario sobre la vigencia real de vacantes viejas.
+
+CAMBIOS REALIZADOS:
+
+A) Tipo de JobPosting.expiresAt:
+
+ANTES:
+```typescript
+export interface JobPosting {
+    ...
+    validityDays: number;
+    expiresAt: Date;  // NO permitía null
+}
+```
+
+AHORA:
+```typescript
+export interface JobPosting {
+    ...
+    // Iteración 3.1: Vigencia (expiresAt puede ser null para vacantes viejas)
+    validityDays: number;
+    expiresAt: Date | null;  // Permite null
+}
+```
+
+B) Mapper en SupabaseJobPostingRepository.mapToEntity():
+
+ANTES (incorrecto):
+```typescript
+validityDays: data.validity_days || 30,
+expiresAt: data.expires_at 
+    ? new Date(data.expires_at) 
+    : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // ❌ Inventaba fecha
+```
+
+AHORA (correcto):
+```typescript
+// Iteración 3.1: Vigencia (sin inventar fechas para vacantes viejas)
+validityDays: data.validity_days || 30,
+expiresAt: data.expires_at ? new Date(data.expires_at) : null, // ✅ Null si no existe
+```
+
+C) Interface Job en dashboard (/recruiter/jobs/page.tsx):
+
+ANTES:
+```typescript
+interface Job {
+    ...
+    expiresAt: string;  // NO permitía null
+}
+```
+
+AHORA:
+```typescript
+interface Job {
+    ...
+    // Iteración 3.1: Vigencia (expiresAt puede ser null para vacantes viejas)
+    validityDays: number;
+    expiresAt: string | null;  // Permite null
+}
+```
+
+D) Función getJobStatus en dashboard:
+
+La función YA manejaba correctamente el caso null desde Iteración 3:
+
+```typescript
+const getJobStatus = (job: Job) => {
+    if (!job.expiresAt) return { status: 'active', daysLeft: null, message: null };
+    
+    // ... resto del cálculo para vacantes con fecha
+}
+```
+
+COMPORTAMIENTO:
+- Si `job.expiresAt` es null → status: 'active', daysLeft: null, NO mensaje.
+- Si `job.expiresAt` existe → calcula daysLeft y determina estado (expired/expiring_soon/active).
+
+RESULTADO:
+- Vacantes viejas (expires_at = NULL en BD) → se mapean con expiresAt = null.
+- Dashboard NO muestra badge "X días restantes" para vacantes sin vigencia.
+- Solo muestra badge "Activa/Inactiva" estándar (sin inventar información falsa).
+
+================================================================================
+3. COMPORTAMIENTO ACTUALIZADO DEL DASHBOARD
+================================================================================
+
+VACANTES CON expiresAt = null (VACANTES VIEJAS):
+
+En el dashboard del reclutador (/recruiter/jobs):
+- Badge: Solo "Activa" (verde) o "Inactiva" (gris) según is_active.
+- NO se muestra badge de "X días restantes".
+- NO se muestra mensaje de advertencia.
+- Tratamiento: vacante activa sin vigencia configurada.
+
+VACANTES CON expiresAt DEFINIDO (VACANTES NUEVAS):
+
+Estado "expired" (daysLeft < 0):
+- Badge adicional: 🔴 Expirada (rojo)
+- Mensaje: "Esta vacante ya no se muestra a los candidatos"
+- Fondo rojo claro debajo del título
+
+Estado "expiring_soon" (0 <= daysLeft <= 3):
+- Badge adicional: ⚠️ Por expirar (naranja)
+- Mensaje: "Tu vacante expira en X días. Actualízala o se desactivará"
+- Fondo naranja claro debajo del título
+
+Estado "active" (daysLeft > 3):
+- Badge adicional: 📅 X días restantes (azul)
+- NO mensaje de advertencia
+
+IMPORTANTE:
+- El badge "Activa/Inactiva" siempre se muestra (basado en is_active).
+- Los badges de vigencia (🔴/⚠️/📅) son adicionales y SOLO para vacantes con expiresAt definido.
+
+================================================================================
+4. FILTRADO DE VACANTES PARA BUSCADORES
+================================================================================
+
+Query en SupabaseJobPostingRepository.findAll():
+
+```sql
+WHERE is_active = true
+  AND (expires_at IS NULL OR expires_at >= CURRENT_DATE)
+```
+
+Equivalente en Supabase JS:
+
+```typescript
+query = query.eq('is_active', true);
+const today = new Date().toISOString().split('T')[0];
+query = query.or(`expires_at.is.null,expires_at.gte.${today}`);
+```
+
+COMPORTAMIENTO:
+
+Caso A: Vacante vieja (expires_at = NULL)
+- Condición: is_active = true AND expires_at IS NULL
+- Resultado: ✅ SE MUESTRA a candidatos
+- Explicación: Vacantes viejas siguen visibles hasta que se editen
+
+Caso B: Vacante nueva vigente (expires_at >= hoy)
+- Condición: is_active = true AND expires_at >= hoy
+- Resultado: ✅ SE MUESTRA a candidatos
+- Explicación: Vacante aún no ha expirado
+
+Caso C: Vacante expirada (expires_at < hoy)
+- Condición: is_active = true BUT expires_at < hoy
+- Resultado: ❌ NO SE MUESTRA a candidatos
+- Explicación: Vacante venció, desaparece automáticamente de búsqueda
+
+Caso D: Vacante inactiva (is_active = false)
+- Condición: is_active = false
+- Resultado: ❌ NO SE MUESTRA a candidatos
+- Explicación: Reclutador la desactivó manualmente
+
+================================================================================
+5. CÁLCULO DE expiresAt (SIN CAMBIOS EN LA FÓRMULA)
+================================================================================
+
+NO se modificó la lógica de cálculo de expiresAt en los casos de uso.
+
+En CreateJobPosting:
+```typescript
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+const expiresAt = new Date(today.getTime() + (validityDays * 24 * 60 * 60 * 1000));
+```
+
+En UpdateJobPosting:
+```typescript
+if (dto.validityDays !== undefined) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    expiresAt = new Date(today.getTime() + (validityDays * 24 * 60 * 60 * 1000));
+}
+```
+
+NOTA:
+- La fórmula actual calcula: hoy + X días completos.
+- NO se ajustó para posibles "off-by-one" (como solicitado en instrucciones).
+- Se mantiene exactamente igual que en Iteración 3.
+
+================================================================================
+6. GUÍA DE PRUEBA MANUAL
+================================================================================
+
+CASO A: VACANTE VIEJA SIN expires_at (NULL EN BD)
+
+1. En Supabase SQL Editor:
+   ```sql
+   INSERT INTO job_postings (
+       recruiter_id, title, company_name, location, industrial_sector,
+       job_area, contract_type, modality, shift, description_short,
+       contact_phone, contact_email, is_active,
+       company_rfc, company_location, worksite_location,
+       contractor_phone_whatsapp, company_phone, start_date
+   ) VALUES (
+       'xxx', 'Maestro de Obra (Vacante Vieja)', 'Constructora ABC',
+       'CDMX', 'Construcción', 'Albañilería', 'full-time', 'on-site',
+       'morning', 'Vacante de prueba sin vigencia', '5512345678',
+       'rh@abc.com', true,
+       'ABC120101ABC', 'CDMX', 'CDMX', '5587654321', '5512345678',
+       CURRENT_DATE
+   );
+   -- Nota: NO se especifican validity_days ni expires_at (quedan NULL)
+   ```
+
+2. Ir a búsqueda de vacantes (/jobs):
+   - ✅ La vacante SE MUESTRA en resultados.
+
+3. Dashboard del reclutador (/recruiter/jobs):
+   - Badge: "Activa" (verde).
+   - NO aparece badge "X días restantes".
+   - NO aparece mensaje de advertencia.
+
+4. Editar la vacante:
+   - Slider aparece en 30 días (default).
+   - Al guardar → ahora tiene validity_days=30 y expires_at calculado.
+
+CASO B: VACANTE NUEVA CON expires_at DEFINIDO
+
+1. Crear vacante desde /recruiter/jobs/new:
+   - Llenar todos los campos.
+   - Slider de vigencia: mover a 15 días.
+   - Publicar.
+
+2. Dashboard del reclutador:
+   - Badge: "Activa" (verde).
+   - Badge adicional: "📅 15 días restantes" (azul, aprox).
+   - NO mensaje de advertencia (tiene > 3 días).
+
+3. Búsqueda (/jobs):
+   - ✅ La vacante SE MUESTRA.
+
+CASO C: VACANTE POR EXPIRAR (0-3 DÍAS RESTANTES)
+
+1. En Supabase SQL Editor:
+   ```sql
+   UPDATE job_postings 
+   SET expires_at = CURRENT_DATE + INTERVAL '2 days',
+       validity_days = 2
+   WHERE id = 'xxx';
+   ```
+
+2. Dashboard del reclutador:
+   - Badge: "Activa" (verde).
+   - Badge adicional: "⚠️ Por expirar" (naranja).
+   - Mensaje naranja: "Tu vacante expira en 2 días. Actualízala o se desactivará".
+
+3. Búsqueda (/jobs):
+   - ✅ La vacante SE MUESTRA (aún no expiró).
+
+CASO D: VACANTE EXPIRADA (expiresAt < hoy)
+
+1. En Supabase SQL Editor:
+   ```sql
+   UPDATE job_postings 
+   SET expires_at = CURRENT_DATE - INTERVAL '1 day',
+       validity_days = 7
+   WHERE id = 'xxx';
+   ```
+
+2. Dashboard del reclutador:
+   - Badge: "Activa" (verde, porque is_active sigue en true).
+   - Badge adicional: "🔴 Expirada" (rojo).
+   - Mensaje rojo: "Esta vacante ya no se muestra a los candidatos".
+
+3. Búsqueda (/jobs):
+   - ❌ La vacante NO SE MUESTRA.
+   - Filtro: `expires_at < hoy` → excluida automáticamente.
+
+4. Reclutador puede:
+   - Editar la vacante.
+   - Cambiar vigencia a 7-30 días nuevos.
+   - Guardar → expires_at se recalcula desde HOY.
+   - Vacante vuelve a aparecer en búsqueda.
+
+CASO E: VERIFICAR is_active vs status
+
+1. En Supabase SQL Editor:
+   ```sql
+   SELECT id, title, is_active, expires_at FROM job_postings LIMIT 5;
+   ```
+
+2. Confirmar:
+   - Columna `is_active` existe y es BOOLEAN (true/false).
+   - NO debe existir columna `status` (si existe, es legacy).
+
+3. Activar/Desactivar vacante desde UI:
+   - El toggle debe actualizar `is_active` directamente.
+
+4. Verificar query logs (consola navegador):
+   - Debe mostrar: "Filtering by is_active = true".
+   - NO debe mostrar: "Filtering by status = active".
+
+================================================================================
+7. ARCHIVOS MODIFICADOS (RESUMEN)
+================================================================================
+
+DOMINIO:
+  ✅ src/domain/entities/JobPosting.ts
+     - Cambio: expiresAt: Date | null (permite null)
+     - Agregados: validityDays, expiresAt (si faltaban)
+
+APLICACIÓN:
+  ✅ src/application/dto/CreateJobPostingDTO.ts
+     - Agregado: validityDays: number (si faltaba)
+  
+  ✅ src/application/use-cases/recruiter/CreateJobPosting.ts
+     - Agregada: validación validityDays (7-30)
+     - Agregado: cálculo expiresAt (si faltaba)
+  
+  ✅ src/application/use-cases/recruiter/UpdateJobPosting.ts
+     - Agregada: validación validityDays (si faltaba)
+     - Agregado: recálculo expiresAt (si faltaba)
+
+INFRAESTRUCTURA:
+  ✅ src/infrastructure/supabase/SupabaseJobPostingRepository.ts
+     - findAll(): cambio status → is_active, agregado filtro expires_at
+     - mapToEntity(): cambio status → is_active, expiresAt null en lugar de fecha inventada
+     - create(): cambio status → is_active, agregados validity_days/expires_at
+     - update(): cambio status → is_active, agregados validity_days/expires_at
+
+PRESENTACIÓN:
+  ✅ src/app/recruiter/jobs/page.tsx
+     - Interface Job: expiresAt: string | null (permite null)
+     - getJobStatus: ya manejaba null correctamente (sin cambios)
+
+TOTAL: 7 archivos modificados
+
+================================================================================
+8. DIFERENCIAS CON ITERACIÓN 3 ORIGINAL
+================================================================================
+
+CAMBIO 1: Columna de estado
+- Iteración 3: usaba `status` (texto 'active'/'inactive')
+- Iteración 3.1: usa `is_active` (BOOLEAN true/false) ✅
+
+CAMBIO 2: Manejo de vacantes viejas
+- Iteración 3: inventaba expiresAt = hoy + 30 días si NULL
+- Iteración 3.1: deja expiresAt = null si NULL en BD ✅
+
+CAMBIO 3: Tipo de expiresAt
+- Iteración 3: expiresAt: Date (NO null)
+- Iteración 3.1: expiresAt: Date | null ✅
+
+MANTENIDO SIN CAMBIOS:
+- ✅ Fórmula de cálculo de expiresAt (hoy + validityDays días)
+- ✅ Validación 7-30 días
+- ✅ Lógica de estados (expired/expiring_soon/active)
+- ✅ UI del slider en formularios
+- ✅ Badges visuales en dashboard
+- ✅ Filtro para buscadores (solo se corrigió sintaxis is_active)
+
+================================================================================
+9. NOTAS FINALES
+================================================================================
+
+- NO se modificó nada de Iteración 1 (KYC) ni Iteración 2 (Seguridad).
+- NO se crearon nuevas migraciones (solo se usan las de Iteración 3).
+- NO se cambió la fórmula de cálculo de días (posibles off-by-one mantienen).
+- Arquitectura hexagonal respetada: correcciones solo en capas correspondientes.
+- Backward compatible: vacantes viejas siguen funcionando.
+- Frontend forms (new/edit) ya tenían validityDays desde Iteración 3 (no se tocaron).
+
+PRÓXIMOS PASOS (SI APLICAN):
+1. Ejecutar migración de Iteración 3 en Supabase (si no se hizo):
+   supabase/migrations/20250123000003_add_job_validity_fields.sql
+
+2. Verificar que la columna `is_active` existe en job_postings.
+   - Si existe columna `status` (texto), podría causar confusión.
+   - Considerar eliminar `status` en una futura limpieza (opcional).
+
+3. Deploy a producción y probar casos A-E de esta guía.
+
+================================================================================
+FIN DEL RESUMEN - ITERACIÓN 3.1
+================================================================================

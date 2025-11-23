@@ -1,0 +1,886 @@
+================================================================================
+  ITERACIÓN 5: Login con Google (OAuth) y Mejora de UX de Confirmación de Email
+  VERSIÓN FINAL - CIERRE DE ITERACIÓN
+  Fecha: 23 de enero de 2025
+================================================================================
+
+OBJETIVO:
+1. Permitir login/registro con Google mediante OAuth de Supabase ✅
+2. Mejorar UX de confirmación de correo con pantalla clara y gating básico ✅
+3. Documentar configuración de templates de email en Supabase Dashboard ✅
+
+RESTRICCIONES RESPETADAS:
+✅ NO se tocó KYC, términos, seguridad de vacante, vigencia, avisos (Iteraciones 1-4)
+✅ NO se crearon migraciones nuevas
+✅ NO se refactorizó arquitectura hexagonal
+✅ Solo extensiones sobre código existente
+
+================================================================================
+1. RUTAS AFECTADAS Y NUEVAS
+================================================================================
+
+MODIFICADAS:
+────────────
+✅ /auth/login - Agregado botón "Continuar con Google"
+✅ /auth/register - Agregado botón "Continuar con Google"
+✅ /auth/register/actions.ts - Cambiado redirect de choose-role a check-email
+
+CREADAS:
+────────
+✅ /auth/check-email - Pantalla de "Revisa tu correo" (nueva página)
+✅ /auth/callback - Route handler para procesar OAuth callback (nueva API route)
+
+MODIFICADAS (infraestructura):
+──────────────────────────────
+✅ src/middleware.ts - Agregado gating de email confirmado + rutas exentas
+
+DOCUMENTACIÓN CREADA:
+─────────────────────
+✅ docs/AUTH_EMAIL_TEMPLATES_SUPABASE.md - Guía completa de configuración
+
+================================================================================
+2. CÓMO SE DISPARA signInWithOAuth PARA GOOGLE
+================================================================================
+
+IMPLEMENTACIÓN EN /auth/login:
+───────────────────────────────
+
+Función handleGoogleLogin():
+```typescript
+const handleGoogleLogin = async () => {
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            redirectTo: `${window.location.origin}/auth/callback`,
+        },
+    });
+};
+```
+
+PARÁMETROS:
+- provider: 'google'
+- redirectTo: 'http://localhost:3000/auth/callback' (dev) o 'https://meetwork.vercel.app/auth/callback' (prod)
+
+FLUJO:
+1. Usuario hace clic en "Continuar con Google"
+2. Supabase redirige a página de consentimiento de Google
+3. Usuario autoriza acceso (email, perfil básico)
+4. Google devuelve al usuario a: /auth/callback?code=XXXXX
+5. El callback intercambia el code por una sesión de Supabase
+
+
+IMPLEMENTACIÓN EN /auth/register:
+──────────────────────────────────
+
+Función handleGoogleSignup():
+```typescript
+const handleGoogleSignup = async () => {
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            redirectTo: `${window.location.origin}/auth/callback`,
+        },
+    });
+};
+```
+
+NOTA IMPORTANTE:
+- signInWithOAuth funciona tanto para login como para registro
+- Si el usuario de Google NO existe en Supabase → se crea automáticamente
+- Si el usuario de Google YA existe en Supabase → se autentica
+- Por eso usamos la misma función en ambas páginas
+
+
+UI COMÚN EN AMBAS PÁGINAS:
+───────────────────────────
+
+Divider visual:
+```
+─────────── O continúa con ───────────  (en login)
+─────────── O regístrate con ─────────  (en registro)
+```
+
+Botón con logo de Google:
+- Texto: "Continuar con Google" / "Conectando con Google..."
+- Icono: Logo de Google en 4 colores (SVG inline)
+- Estilo: Outline button, hover bg-neutral-50
+- Deshabilitado mientras carga (loadingGoogle state)
+
+================================================================================
+3. FLUJO COMPLETO DE REGISTRO (ACTUALIZADO)
+================================================================================
+
+FLUJO A: REGISTRO CON EMAIL + PASSWORD
+───────────────────────────────────────
+
+1. Usuario va a /auth/register
+2. Llena formulario (email, password, confirmPassword)
+3. Click en "Crear Cuenta"
+4. Server action signUp() crea usuario en Supabase Auth
+5. ✨ NUEVO: Redirect a /auth/check-email (antes iba directo a choose-role)
+6. Pantalla de "Revisa tu correo" con instrucciones claras
+7. Usuario abre email y hace clic en link de confirmación
+8. Link lo lleva a Supabase que procesa confirmación
+9. ✨ NUEVO: Middleware detecta email_confirmed_at
+10. Si NO confirmado → redirect a /auth/check-email (gating)
+11. Si confirmado → permite acceso
+12. Usuario hace login en /auth/login
+13. Middleware verifica que tenga email confirmado ✅
+14. Si NO tiene rol → redirect a /auth/choose-role
+15. Elige rol (recruiter o seeker)
+16. Si NO ha aceptado términos → redirect a /legal/terms-acceptance
+17. Acepta términos
+18. Si NO tiene perfil → redirect a /recruiter/profile/create o /seeker/profile/create
+19. Crea perfil
+20. ✅ Acceso completo a la plataforma
+
+
+FLUJO B: REGISTRO/LOGIN CON GOOGLE (OAuth)
+───────────────────────────────────────────
+
+1. Usuario va a /auth/register o /auth/login
+2. Click en "Continuar con Google"
+3. Redirect a página de consentimiento de Google
+4. Usuario autoriza acceso
+5. Google redirect a: /auth/callback?code=XXXXX
+6. Callback handler (route.ts):
+   a. Intercambia code por sesión: exchangeCodeForSession(code)
+   b. Verifica si usuario existe en tabla users
+   c. Si NO existe → INSERT en tabla users (id, email, role=null)
+   d. Si existe → continúa
+   e. Consulta userData (role, terms_accepted)
+   f. Decisión de redirect:
+      - Si NO tiene rol → /auth/choose-role
+      - Si tiene rol pero NO términos → /legal/terms-acceptance ✅
+      - Si tiene todo → /jobs
+
+7. ✨ DIFERENCIA CLAVE: OAuth confirma email automáticamente
+   - user.email_confirmed_at ya está lleno (Google verifica el email)
+   - NO se envía email de confirmación
+   - NO necesita pasar por /auth/check-email
+
+8. Mismo flujo desde choose-role en adelante que email+password
+
+
+CORRECCIÓN EN CALLBACK (para siguiente iteración o hotfix):
+────────────────────────────────────────────────────────────
+✅ YA CORREGIDO EN CÓDIGO FINAL
+En /auth/callback/route.ts, línea 90:
+```typescript
+// CORRECTO (versión final):
+return NextResponse.redirect(new URL('/legal/terms-acceptance', request.url))
+```
+
+NOTAS SOBRE LA CORRECCIÓN:
+- La ruta correcta es /legal/terms-acceptance (donde está la UI de aceptación)
+- NO usar /auth/terms (esa ruta no existe en la aplicación)
+- Esta corrección se aplicó en el cierre de Iteración 5
+
+================================================================================
+4. COMPORTAMIENTO DEL GATING DE EMAIL NO CONFIRMADO
+================================================================================
+
+LÓGICA EN MIDDLEWARE.TS:
+────────────────────────
+
+Agregado DESPUÉS de verificar autenticación, ANTES de verificar rol:
+
+```typescript
+// Verificar email confirmado
+const emailConfirmed = user.email_confirmed_at || user.confirmed_at
+
+// Rutas permitidas sin confirmación
+const emailConfirmationExemptRoutes = [
+    '/auth/check-email',
+    '/auth/logout',
+    '/auth/callback',
+]
+
+const isEmailExempt = emailConfirmationExemptRoutes.some(route => path.startsWith(route))
+
+// Si NO confirmado y NO en ruta exenta → redirect a check-email
+if (!emailConfirmed && !isEmailExempt) {
+    return NextResponse.redirect(new URL('/auth/check-email', request.url))
+}
+```
+
+CASOS DE USO:
+
+Caso A: Usuario registrado con email+password, NO ha confirmado email
+----------------------------------------------------------------------
+- Recibe email de confirmación
+- Ve pantalla /auth/check-email
+- Si intenta navegar a /jobs → middleware lo regresa a /auth/check-email
+- Si intenta ir a /auth/choose-role → middleware lo regresa a /auth/check-email
+- Solo puede estar en: /auth/check-email, /auth/logout, /auth/callback
+- Una vez que confirma email (click en link) → puede continuar
+
+Caso B: Usuario registrado con Google OAuth
+--------------------------------------------
+- email_confirmed_at ya está lleno (Google lo verifica)
+- NO necesita confirmación adicional
+- Pasa directo al flujo de choose-role → terms → profile
+
+Caso C: Usuario con email confirmado
+-------------------------------------
+- Middleware NO lo redirige
+- Flujo normal: choose-role → terms → profile → dashboard
+
+Caso D: Usuario intenta hacer logout sin confirmar email
+---------------------------------------------------------
+- /auth/logout está en emailConfirmationExemptRoutes
+- Puede cerrar sesión normalmente
+
+
+RUTAS EXENTAS DEL GATING:
+──────────────────────────
+
+Agregadas a publicRoutes:
+- /auth/check-email (para que pueda acceder sin estar confirmado)
+
+Agregadas a termsExemptRoutes:
+- /auth/check-email
+- /auth/callback (para procesar OAuth)
+
+
+IMPORTANTE:
+───────────
+- OAuth (Google) confirma email automáticamente
+- Email+password requiere confirmación manual
+- Gating impide acceso a rutas protegidas sin confirmar
+- Mensajes claros en /auth/check-email para reducir fricción
+
+================================================================================
+5. CONTENIDO DE AUTH_EMAIL_TEMPLATES_SUPABASE.md
+================================================================================
+
+SECCIONES DEL DOCUMENTO:
+────────────────────────
+
+1. ¿Dónde Configurar?
+   - Dashboard → Authentication → Email Templates
+
+2. Templates Disponibles:
+   a. Confirm Signup (PRINCIPAL)
+      - Template HTML completo en español
+      - Branding Meetwork
+      - Asunto: "Bienvenido a Meetwork – Confirma tu cuenta"
+      - Variables: {{ .ConfirmationURL }}, {{ .SiteURL }}, {{ .Token }}
+   
+   b. Invite User (futuro)
+   c. Magic Link (opcional)
+   d. Change Email Address (futuro)
+
+3. Configuración de Remitente:
+   - Opción A: Dominio de Supabase (temporal)
+   - Opción B: SMTP propio con Resend, SendGrid, etc. (recomendado)
+
+4. Pruebas:
+   - Cómo probar emails
+   - Servicios de email temporal
+   - Revisar logs en Supabase
+
+5. Solución de Problemas:
+   - Email no llega
+   - Link no funciona
+   - Email en inglés
+
+6. Checklist de Configuración para Producción
+
+7. Recursos Adicionales
+
+
+TEMPLATE RECOMENDADO (Confirm Signup):
+───────────────────────────────────────
+
+Asunto:
+```
+Bienvenido a Meetwork – Confirma tu cuenta
+```
+
+Cuerpo (HTML):
+```html
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <div style="background-color: #f8f9fa; padding: 30px; text-align: center;">
+        <h1 style="color: #2563eb;">¡Bienvenido a Meetwork!</h1>
+        
+        <p>Estás a un paso de conectar con oportunidades laborales...</p>
+        
+        <a href="{{ .ConfirmationURL }}" 
+           style="background-color: #2563eb; color: white; padding: 14px 30px; 
+                  text-decoration: none; border-radius: 6px;">
+            Confirmar mi cuenta
+        </a>
+        
+        <p style="color: #666; margin-top: 30px;">
+            Si no creaste una cuenta en Meetwork, puedes ignorar este correo.
+        </p>
+    </div>
+</body>
+</html>
+```
+
+Ver documento completo en: docs/AUTH_EMAIL_TEMPLATES_SUPABASE.md
+
+================================================================================
+6. CONFIGURACIÓN MANUAL EN SUPABASE (DASHBOARD)
+================================================================================
+
+PASO 1: ACTIVAR PROVEEDOR DE GOOGLE
+────────────────────────────────────
+
+1. Ir a: Supabase Dashboard → Authentication → Providers
+2. Buscar "Google" en la lista de proveedores
+3. Click en "Enable"
+4. Obtener credenciales de Google Cloud Console:
+   
+   a. Ir a: https://console.cloud.google.com
+   b. Crear nuevo proyecto (o usar existente)
+   c. Habilitar "Google+ API"
+   d. Ir a "Credentials" → "Create Credentials" → "OAuth client ID"
+   e. Application type: "Web application"
+   f. Authorized JavaScript origins:
+      - http://localhost:3000 (desarrollo)
+      - https://meetwork.vercel.app (producción)
+   g. Authorized redirect URIs:
+      - https://fvqaczvjimslzupfrjrm.supabase.co/auth/v1/callback
+   h. Copiar Client ID y Client Secret
+
+5. Pegar en Supabase:
+   - Client ID (for OAuth): [pegar aquí]
+   - Client Secret (for OAuth): [pegar aquí]
+
+6. Click en "Save"
+
+7. Verificar que "Enabled" está en verde
+
+
+PASO 2: CONFIGURAR REDIRECT URLs
+─────────────────────────────────
+
+1. Ir a: Supabase Dashboard → Authentication → URL Configuration
+2. Site URL:
+   - Desarrollo: http://localhost:3000
+   - Producción: https://meetwork.vercel.app
+
+3. Redirect URLs (agregar):
+   - http://localhost:3000/auth/callback
+   - https://meetwork.vercel.app/auth/callback
+
+4. Click en "Save"
+
+
+PASO 3: PERSONALIZAR EMAIL TEMPLATES
+─────────────────────────────────────
+
+1. Ir a: Supabase Dashboard → Authentication → Email Templates
+2. Seleccionar "Confirm signup"
+3. Cambiar Subject:
+   - DE: "Confirm Your Signup"
+   - A: "Bienvenido a Meetwork – Confirma tu cuenta"
+
+4. Cambiar Body (HTML):
+   - Copiar template del archivo: docs/AUTH_EMAIL_TEMPLATES_SUPABASE.md
+   - Pegar en el editor
+
+5. Click en "Save"
+
+6. Probar enviando un email de prueba (Register → revisar bandeja)
+
+
+PASO 4 (OPCIONAL): CONFIGURAR SMTP PROPIO
+──────────────────────────────────────────
+
+Para mejor deliverability y branding:
+
+1. Crear cuenta en Resend (recomendado): https://resend.com
+2. Obtener API Key
+3. Verificar dominio (agregar DNS records)
+4. Ir a: Supabase Dashboard → Project Settings → Auth → SMTP Settings
+5. Llenar:
+   - SMTP Host: smtp.resend.com
+   - SMTP Port: 587
+   - SMTP User: resend
+   - SMTP Password: [API key de Resend]
+   - Sender Email: noreply@meetwork.com
+   - Sender Name: Meetwork
+
+6. Click en "Save"
+7. Enviar email de prueba para verificar
+
+
+VERIFICACIÓN:
+─────────────
+1. Registrar usuario de prueba con email+password
+2. Verificar que llega email en español con branding Meetwork
+3. Click en "Confirmar mi cuenta"
+4. Verificar que redirige correctamente
+5. Verificar que usuario puede iniciar sesión
+
+6. Probar "Continuar con Google"
+7. Verificar que abre pantalla de consentimiento de Google
+8. Autorizar
+9. Verificar que redirige a /auth/choose-role (si nuevo usuario)
+
+================================================================================
+7. LISTA DE ARCHIVOS CREADOS/MODIFICADOS
+================================================================================
+
+ARCHIVOS CREADOS:
+─────────────────
+✅ src/app/auth/check-email/page.tsx (85 líneas)
+   - Pantalla de "Revisa tu correo"
+   - Icono de email
+   - Mensaje claro con instrucciones
+   - Tips de troubleshooting (spam, etc.)
+   - Botón para volver a login
+
+✅ src/app/auth/callback/route.ts (90 líneas)
+   - Route handler para OAuth callback
+   - Intercambia code por sesión
+   - Crea/actualiza registro en tabla users
+   - Redirige según estado (rol, términos, perfil)
+
+✅ docs/AUTH_EMAIL_TEMPLATES_SUPABASE.md (350+ líneas)
+   - Guía completa de configuración de emails
+   - Templates en español con branding Meetwork
+   - Configuración de SMTP
+   - Solución de problemas
+   - Checklist de producción
+
+
+ARCHIVOS MODIFICADOS:
+─────────────────────
+✅ src/app/auth/login/page.tsx
+   - Agregado estado loadingGoogle
+   - Agregada función handleGoogleLogin()
+   - Agregado divider visual
+   - Agregado botón "Continuar con Google" con logo SVG
+   - Botón deshabilitado mientras carga
+
+✅ src/app/auth/register/page.tsx
+   - Agregado import de useRouter y createClient
+   - Agregado estado loadingGoogle
+   - Agregada función handleGoogleSignup()
+   - Agregado divider visual
+   - Agregado botón "Continuar con Google" con logo SVG
+
+✅ src/app/auth/register/actions.ts
+   - Cambiado redirect final:
+     DE: redirect('/auth/choose-role')
+     A: redirect('/auth/check-email')
+
+✅ src/middleware.ts
+   - Agregadas rutas a publicRoutes: /auth/check-email
+   - Agregadas rutas a termsExemptRoutes: /auth/check-email, /auth/callback
+   - Agregado gating de email confirmado:
+     * Verifica user.email_confirmed_at || user.confirmed_at
+     * Define emailConfirmationExemptRoutes
+     * Redirige a /auth/check-email si NO confirmado
+
+
+ARCHIVOS NO TOCADOS:
+────────────────────
+✅ Migraciones de BD (sin cambios)
+✅ Tablas users, recruiter_profiles, seeker_profiles (sin cambios)
+✅ KYC / MetaMap (Iteración 1)
+✅ Términos y aceptación (Iteración 1)
+✅ Seguridad de vacantes (Iteración 2)
+✅ Vigencia de vacantes (Iteración 3, 3.1)
+✅ Avisos de vigencia (Iteración 4)
+✅ INotificationService y DummyNotificationService (Iteración 4)
+
+================================================================================
+8. GUÍA DE PRUEBAS MANUALES
+================================================================================
+
+CASO A: REGISTRO CON EMAIL + PASSWORD (FLUJO COMPLETO)
+───────────────────────────────────────────────────────
+
+Setup: Tener acceso a un email de prueba
+
+Pasos:
+1. Ir a http://localhost:3000/auth/register
+2. Llenar formulario:
+   - Email: test@example.com
+   - Password: password123
+   - Confirmar Password: password123
+3. Click en "Crear Cuenta"
+
+Resultado esperado:
+✅ Redirige a /auth/check-email
+✅ Pantalla muestra:
+   - Icono de email (azul)
+   - Título: "Revisa tu Correo"
+   - Mensaje: "Te enviamos un mensaje para confirmar tu cuenta de Meetwork."
+   - Instrucciones claras
+   - Box azul con tips (spam, etc.)
+   - Botón "Volver al Inicio de Sesión"
+
+4. Abrir bandeja de entrada del email test@example.com
+✅ Email llega en < 2 minutos
+✅ Asunto: "Bienvenido a Meetwork – Confirma tu cuenta" (si configuraste template)
+   O: "Confirm Your Signup" (si NO configuraste)
+✅ Cuerpo tiene link "Confirmar mi cuenta"
+
+5. Click en link de confirmación
+✅ Redirige a Supabase
+✅ Supabase procesa confirmación
+✅ Redirige de vuelta a la app (probablemente a /auth/login o /)
+
+6. Ir a /auth/login
+7. Ingresar credenciales (email + password)
+✅ Login exitoso
+✅ Middleware NO redirige a /auth/check-email (email ya confirmado)
+✅ Redirige a /auth/choose-role (si no tiene rol)
+
+8. Elegir rol (recruiter o seeker)
+✅ Redirige a /legal/terms-acceptance
+
+9. Aceptar términos
+✅ Redirige a /recruiter/profile/create o /seeker/profile/create
+
+10. Crear perfil
+✅ Acceso completo a plataforma
+
+
+CASO B: REGISTRO CON EMAIL + PASSWORD (SIN CONFIRMAR EMAIL)
+────────────────────────────────────────────────────────────
+
+Setup: Registro nuevo sin confirmar email
+
+Pasos:
+1. Registrar usuario test2@example.com (seguir pasos 1-3 de Caso A)
+2. Ver pantalla /auth/check-email ✅
+3. NO abrir el email, NO confirmar
+4. Intentar navegar a /jobs
+   → Middleware redirige a /auth/check-email ✅
+5. Intentar ir a /auth/choose-role
+   → Middleware redirige a /auth/check-email ✅
+6. Intentar ir a /recruiter/jobs
+   → Middleware redirige a /auth/check-email ✅
+7. Click en "Volver al Inicio de Sesión"
+8. Hacer login con email + password
+   → Login exitoso (Supabase permite login sin confirmar)
+   → Middleware detecta email NO confirmado
+   → Redirige a /auth/check-email ✅
+
+9. Abrir email, click en link de confirmación
+10. Hacer login nuevamente
+    → Ahora SÍ puede avanzar a choose-role ✅
+
+
+CASO C: LOGIN/REGISTRO CON GOOGLE (NUEVO USUARIO)
+──────────────────────────────────────────────────
+
+Setup: Cuenta de Google que NO ha usado Meetwork antes
+
+Pasos:
+1. Ir a /auth/register (o /auth/login, da igual)
+2. Click en "Continuar con Google"
+
+Resultado esperado:
+✅ Redirige a página de consentimiento de Google
+✅ Muestra permisos solicitados (email, perfil básico)
+
+3. Seleccionar cuenta de Google
+4. Click en "Permitir"
+
+✅ Redirige a /auth/callback?code=XXXXX
+✅ Callback procesa code (puede tardar 1-2 segundos)
+✅ Callback crea registro en tabla users (role=null)
+✅ Redirige a /auth/choose-role
+
+NOTA: NO se envía email de confirmación (Google ya verificó el email)
+
+5. Elegir rol
+✅ Redirige a /legal/terms-acceptance
+
+6. Aceptar términos
+✅ Redirige a /recruiter/profile/create o /seeker/profile/create
+
+7. Crear perfil
+✅ Acceso completo
+
+
+CASO D: LOGIN CON GOOGLE (USUARIO EXISTENTE CON PERFIL COMPLETO)
+─────────────────────────────────────────────────────────────────
+
+Setup: Usuario que ya completó onboarding (rol, términos, perfil)
+
+Pasos:
+1. Hacer logout
+2. Ir a /auth/login
+3. Click en "Continuar con Google"
+4. Seleccionar cuenta de Google que ya usó antes
+5. Autorizar
+
+Resultado esperado:
+✅ Redirige a /auth/callback
+✅ Callback verifica que usuario ya tiene rol y términos
+✅ Redirige directamente a /jobs
+✅ NO pasa por choose-role ni terms-acceptance (ya los completó antes)
+
+
+CASO E: VERIFICAR GATING DE EMAIL
+──────────────────────────────────
+
+Pasos:
+1. Registrar usuario con email+password pero NO confirmar email
+2. Intentar acceder a rutas protegidas desde URL:
+   - /jobs → redirige a /auth/check-email ✅
+   - /recruiter/jobs → redirige a /auth/check-email ✅
+   - /auth/choose-role → redirige a /auth/check-email ✅
+   - /legal/terms-acceptance → redirige a /auth/check-email ✅
+
+3. Rutas que SÍ debe poder acceder:
+   - /auth/check-email ✅ (para ver instrucciones)
+   - /auth/logout ✅ (para cerrar sesión)
+
+4. Confirmar email (click en link)
+5. Hacer login
+6. Ahora SÍ puede acceder a /auth/choose-role ✅
+
+
+CASO F: VERIFICAR BOTONES EN UI
+────────────────────────────────
+
+En /auth/login:
+✅ Formulario de email+password funciona
+✅ Divider dice "O continúa con"
+✅ Botón de Google tiene logo de colores
+✅ Botón de Google dice "Continuar con Google"
+✅ Al hacer clic, cambia a "Conectando con Google..."
+✅ Botón se deshabilita mientras carga
+✅ Redirige a Google correctamente
+
+En /auth/register:
+✅ Formulario de email+password funciona
+✅ Divider dice "O regístrate con"
+✅ Botón de Google idéntico a login
+✅ Comportamiento idéntico
+
+En /auth/check-email:
+✅ Icono de email visible
+✅ Título "Revisa tu Correo" claro
+✅ Mensaje principal explica qué hacer
+✅ Box azul con tips de spam/promociones
+✅ Botón "Volver al Inicio de Sesión" funciona
+✅ Mensaje secundario sobre completar perfil después
+
+================================================================================
+9. RESUMEN DE FLUJOS (DIAGRAMA TEXTUAL)
+================================================================================
+
+FLUJO EMAIL+PASSWORD:
+─────────────────────
+Register → Check-Email → [Email] → Confirm → Login → 
+  → Middleware (email confirmado? ✅) → Choose-Role → Terms → Profile → Jobs
+
+FLUJO GOOGLE OAUTH:
+───────────────────
+Login/Register → Google Consent → Callback → 
+  → [Crear user si nuevo] → Choose-Role → Terms → Profile → Jobs
+
+DIFERENCIAS CLAVE:
+──────────────────
+1. Email+password REQUIERE confirmación manual → pantalla check-email
+2. Google OAuth confirma email automáticamente → salta check-email
+3. Middleware bloquea acceso si email NO confirmado (solo email+password)
+4. Ambos flujos convergen en choose-role después de autenticación
+
+================================================================================
+10. NOTAS TÉCNICAS IMPORTANTES
+================================================================================
+
+1. redirectTo en OAuth:
+   - Usa window.location.origin para funcionar en dev y prod
+   - Dev: http://localhost:3000/auth/callback
+   - Prod: https://meetwork.vercel.app/auth/callback
+
+2. exchangeCodeForSession:
+   - Requerido en /auth/callback para convertir code en sesión
+   - Supabase maneja tokens automáticamente
+
+3. Creación de usuario en tabla users:
+   - Callback verifica si existe antes de INSERT
+   - Evita errores de duplicate key
+   - Maneja tanto usuarios nuevos como existentes
+
+4. Email confirmado:
+   - user.email_confirmed_at (OAuth y email+password confirmado)
+   - user.confirmed_at (legacy, por si acaso)
+   - Middleware verifica ambos con OR
+
+5. Gating granular:
+   - emailConfirmationExemptRoutes permite rutas específicas
+   - Evita loops infinitos (check-email → check-email)
+   - Permite logout sin confirmar email
+
+6. Templates de email:
+   - NO se pueden cambiar desde código
+   - Solo desde Supabase Dashboard
+   - Cambios se aplican inmediatamente
+   - Usar {{ .ConfirmationURL }} para link
+
+7. SMTP propio vs. Supabase:
+   - Supabase: 100 emails/hora (plan gratis)
+   - SMTP propio (Resend): mejor deliverability + branding
+   - Recomendado para producción
+
+================================================================================
+11. ORDEN DE VERIFICACIONES EN MIDDLEWARE.TS (VERSIÓN FINAL)
+================================================================================
+
+FLUJO EXACTO DEL MIDDLEWARE:
+────────────────────────────
+
+1. Inicializar Supabase server client
+2. Obtener usuario actual: await supabase.auth.getUser()
+3. Obtener path de la request
+
+4. CHEQUEO 1: ¿Es ruta pública?
+   - publicRoutes: ['/', '/jobs', '/auth/login', '/auth/register', '/auth/check-email']
+   - Si path está en publicRoutes → permitir acceso, salir
+
+5. CHEQUEO 2: ¿Es API route exenta?
+   - /api/* excepto /api/kyc/* y /api/legal/*
+   - Si es API exenta → permitir acceso, salir
+
+6. CHEQUEO 3: ¿Usuario NO autenticado?
+   - Si !user && !path.startsWith('/auth') → redirect('/auth/login')
+
+7. CHEQUEO 4: ¿Email confirmado? (GATING DE EMAIL)
+   - emailConfirmed = user.email_confirmed_at || user.confirmed_at
+   - emailConfirmationExemptRoutes: ['/auth/check-email', '/auth/logout', '/auth/callback']
+   - Si !emailConfirmed && !isEmailExempt → redirect('/auth/check-email')
+
+8. CHEQUEO 5: Obtener datos de usuario
+   - Query a public.users: SELECT role, terms_accepted WHERE id = user.id
+
+9. CHEQUEO 6: ¿Tiene rol?
+   - Si !userRole && path !== '/auth/choose-role' → redirect('/auth/choose-role')
+
+10. CHEQUEO 7: ¿Aceptó términos?
+    - termsExemptRoutes: ['/legal/terms-acceptance', '/auth/logout', '/api/legal/accept-terms', 
+                          '/auth/choose-role', '/recruiter/profile/create', '/seeker/profile/create',
+                          '/auth/check-email', '/auth/callback']
+    - Si userRole && !termsAccepted && !isTermsExempt → redirect('/legal/terms-acceptance')
+
+11. CHEQUEO 8: ¿Tiene perfil completo?
+    - Solo si termsAccepted = true
+    - Si userRole === 'recruiter':
+      * Query a recruiter_profiles
+      * Si !profile && path !== '/recruiter/profile/create' → redirect('/recruiter/profile/create')
+      * Si path.startsWith('/seeker/') && path !== '/seeker/profile/create' → redirect('/recruiter/dashboard')
+    - Si userRole === 'seeker':
+      * Query a seeker_profiles
+      * Si !profile && path !== '/seeker/profile/create' → redirect('/seeker/profile/create')
+      * Si path.startsWith('/recruiter/') && path !== '/recruiter/profile/create' → redirect('/jobs')
+
+12. Permitir acceso
+
+ORDEN CRÍTICO:
+──────────────
+✅ Rutas públicas PRIMERO (para evitar redirects innecesarios)
+✅ Autenticación SEGUNDO (antes de cualquier otro chequeo)
+✅ Email confirmado TERCERO (antes de onboarding)
+✅ Rol CUARTO
+✅ Términos QUINTO
+✅ Perfil SEXTO (último)
+
+ESTE ORDEN EVITA:
+─────────────────
+- Loops de redirección
+- Bloqueos prematuros
+- Experiencia confusa para el usuario
+
+================================================================================
+12. TAREAS PENDIENTES (ACTUALIZADAS)
+================================================================================
+
+CORTO PLAZO:
+────────────
+1. ✅ COMPLETADO: Corregir redirect en /auth/callback (/auth/terms → /legal/terms-acceptance)
+2. Probar OAuth en producción:
+   - Verificar redirect URIs en Google Console
+   - Verificar Site URL en Supabase
+3. Configurar templates de email:
+   - Aplicar template en español del documento
+   - Probar que llegue correctamente
+
+MEDIANO PLAZO:
+──────────────
+1. Agregar Apple Sign-In (OAuth similar a Google)
+2. Implementar "Reenviar email de confirmación" en /auth/check-email
+3. Agregar rate limiting a OAuth para prevenir abuse
+4. Mejorar manejo de errores en callback (mostrar mensaje al usuario)
+
+LARGO PLAZO:
+────────────
+1. Configurar SMTP propio con Resend
+2. Verificar dominio para emails (SPF, DKIM, DMARC)
+3. Implementar sistema de invitaciones (usar template "Invite User")
+4. Agregar Magic Link como opción de login sin contraseña
+
+================================================================================
+12. CHECKLIST DE DEPLOYMENT
+================================================================================
+
+ANTES DE DEPLOYAR:
+──────────────────
+- [ ] Configurar Google OAuth en Supabase Dashboard (Client ID + Secret)
+- [ ] Agregar redirect URIs de producción en Google Console
+- [ ] Verificar Site URL en Supabase (https://meetwork.vercel.app)
+- [ ] Cambiar template de "Confirm signup" al español
+- [ ] Probar registro con email+password en local
+- [ ] Probar OAuth con Google en local
+- [ ] Verificar que gating de email funciona
+- [ ] Deploy a Vercel
+
+DESPUÉS DE DEPLOYAR:
+────────────────────
+- [ ] Probar registro con email+password en producción
+- [ ] Verificar que email llega correctamente
+- [ ] Confirmar email y completar onboarding
+- [ ] Probar OAuth con Google en producción
+- [ ] Verificar que callback funciona en prod
+- [ ] Crear usuario de prueba completo (ambos métodos)
+- [ ] Verificar analytics de Supabase (cuántos usuarios confirman email)
+
+OPCIONAL (MEJORAS):
+───────────────────
+- [ ] Configurar SMTP propio (Resend)
+- [ ] Verificar dominio para emails
+- [ ] Agregar tracking de conversión (registro → confirmación → perfil completo)
+- [ ] Implementar A/B testing de templates de email
+
+================================================================================
+13. RECURSOS Y REFERENCIAS
+================================================================================
+
+DOCUMENTACIÓN:
+──────────────
+- Supabase Auth: https://supabase.com/docs/guides/auth
+- OAuth with Google: https://supabase.com/docs/guides/auth/social-login/auth-google
+- Email Templates: https://supabase.com/docs/guides/auth/auth-email-templates
+- Resend (SMTP): https://resend.com/docs/introduction
+
+CÓDIGO DE REFERENCIA:
+─────────────────────
+- Ejemplo de OAuth callback: https://github.com/supabase/auth-helpers/tree/main/examples
+- Templates de email: docs/AUTH_EMAIL_TEMPLATES_SUPABASE.md
+
+HERRAMIENTAS:
+─────────────
+- Google Cloud Console: https://console.cloud.google.com
+- Supabase Dashboard: https://supabase.com/dashboard
+- Email temporales para testing: https://temp-mail.org
+
+================================================================================
+FIN DEL RESUMEN - ITERACIÓN 5
+================================================================================

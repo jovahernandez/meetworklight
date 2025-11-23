@@ -9,16 +9,22 @@ const config: Config = {
     theme: {
         extend: {
             colors: {
-                // Meetwork branding colors (adjust based on PDF - placeholder for now)
+                // Meetwork branding colors - Verde primario según PDF
                 primary: {
-                    DEFAULT: '#1A4D8F', // Industrial blue
-                    light: '#2563EB',
-                    dark: '#0F3460',
+                    DEFAULT: '#3EBF4E', // Verde Meetwork primario
+                    light: '#7FD98A', // Verde claro
+                    dark: '#1F9D47', // Verde oscuro
                 },
                 accent: {
-                    DEFAULT: '#F59E0B', // Construction yellow/orange
-                    light: '#FCD34D',
-                    dark: '#D97706',
+                    DEFAULT: '#FFC700', // Amarillo acento
+                    light: '#FFD633',
+                    dark: '#CC9F00',
+                },
+                secondary: {
+                    green: '#7FD98A', // Verde claro secundario
+                    teal: '#17A398', // Turquesa secundario
+                    coral: '#FF6B6B', // Coral/Rojo acento
+                    yellow: '#FFC700', // Amarillo acento
                 },
                 neutral: {
                     50: '#F9FAFB',

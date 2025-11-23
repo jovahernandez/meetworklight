@@ -1,0 +1,337 @@
+================================================================================
+  ITERACIÓN 2: Datos de Seguridad en Vacantes
+  Fecha: 23 de enero de 2025
+================================================================================
+
+OBJETIVO:
+Hacer más "seria" y confiable la creación de vacantes, añadiendo campos
+obligatorios de empresa, obra y contacto. NO se refactorizó nada existente,
+SOLO se extendió el schema, la entidad y los formularios.
+
+================================================================================
+1. NUEVAS COLUMNAS EN LA BASE DE DATOS (tabla: job_postings)
+================================================================================
+
+ALTER TABLE public.job_postings
+    ADD COLUMN IF NOT EXISTS company_rfc TEXT,
+    ADD COLUMN IF NOT EXISTS company_location TEXT,
+    ADD COLUMN IF NOT EXISTS worksite_location TEXT,
+    ADD COLUMN IF NOT EXISTS worksite_google_maps_url TEXT,
+    ADD COLUMN IF NOT EXISTS contractor_phone_whatsapp TEXT,
+    ADD COLUMN IF NOT EXISTS company_phone TEXT,
+    ADD COLUMN IF NOT EXISTS start_date DATE;
+
+Archivo: supabase/migrations/20250123000002_add_job_security_fields.sql
+
+IMPORTANTE: Todas las columnas son NULL por defecto (backward compatible).
+La aplicación las trata como obligatorias a partir de ahora.
+
+================================================================================
+2. NUEVOS CAMPOS EN ENTIDADES Y DTOs
+================================================================================
+
+Entidad de Dominio (src/domain/entities/JobPosting.ts):
+  - companyRfc: string
+  - companyLocation: string
+  - worksiteLocation: string
+  - worksiteGoogleMapsUrl?: string  (opcional en el tipo)
+  - contractorPhoneWhatsapp: string
+  - companyPhone: string
+  - startDate: Date
+
+DTOs de Aplicación (src/application/dto/CreateJobPostingDTO.ts):
+  CreateJobPostingDTO:
+    - companyRfc: string
+    - companyLocation: string
+    - worksiteLocation: string
+    - worksiteGoogleMapsUrl?: string
+    - contractorPhoneWhatsapp: string
+    - companyPhone: string
+    - startDate: Date
+
+  UpdateJobPostingDTO (todos opcionales):
+    - companyRfc?: string
+    - companyLocation?: string
+    - worksiteLocation?: string
+    - worksiteGoogleMapsUrl?: string
+    - contractorPhoneWhatsapp?: string
+    - companyPhone?: string
+    - startDate?: Date
+
+================================================================================
+3. VALIDACIONES IMPLEMENTADAS
+================================================================================
+
+A) EN LOS CASOS DE USO (backend)
+   Archivo: src/application/use-cases/recruiter/CreateJobPosting.ts
+   Archivo: src/application/use-cases/recruiter/UpdateJobPosting.ts
+
+   RFC de la Empresa (companyRfc):
+     - No puede estar vacío
+     - Longitud: exactamente 12 o 13 caracteres
+     - Error: "El RFC de la empresa debe tener 12 o 13 caracteres"
+
+   Ubicación de la Empresa (companyLocation):
+     - No puede estar vacía
+     - Error: "La ubicación de la empresa es obligatoria"
+
+   Ubicación de la Obra (worksiteLocation):
+     - No puede estar vacía
+     - Error: "La ubicación de la obra/sitio es obligatoria"
+
+   Link Google Maps (worksiteGoogleMapsUrl):
+     - Obligatorio SI modality !== 'remote'
+     - Debe contener "google.com/maps" O "maps.app.goo.gl"
+     - Error (si vacío): "El link de Google Maps es obligatorio para trabajos que no son remotos"
+     - Error (formato): "El link de Google Maps debe ser una URL válida de Google Maps"
+     - Opcional si modality === 'remote'
+
+   WhatsApp del Contratista (contractorPhoneWhatsapp):
+     - No puede estar vacío
+     - Longitud mínima: 8 caracteres
+     - Error: "El teléfono/WhatsApp del contratista debe tener al menos 8 caracteres"
+
+   Teléfono de la Empresa (companyPhone):
+     - No puede estar vacío
+     - Longitud mínima: 8 caracteres
+     - Error: "El teléfono de la empresa debe tener al menos 8 caracteres"
+
+   Fecha de Inicio (startDate):
+     - Debe ser una instancia válida de Date
+     - Error: "La fecha de inicio de actividades es obligatoria"
+
+B) EN EL FRONTEND (UI)
+   Archivos: src/app/recruiter/jobs/new/page.tsx
+             src/app/recruiter/jobs/[id]/edit/page.tsx
+
+   - Todos los campos marcados con required en HTML5
+   - RFC: maxLength={13}, transformación automática a mayúsculas
+   - Teléfonos: required
+   - Fecha: input type="date" con min={today} (no permite fechas pasadas)
+   - Checkbox "La obra está en la misma ubicación que la empresa"
+     → copia automáticamente companyLocation → worksiteLocation
+   - Link Google Maps: muestra "(opcional)" si modality === 'Remoto'
+
+================================================================================
+4. CAMBIOS EN FORMULARIOS
+================================================================================
+
+Formulario de Creación (src/app/recruiter/jobs/new/page.tsx):
+  - Agregada sección "📋 Datos de Seguridad de la Vacante"
+  - Insertada ANTES de la sección de contacto
+  - Campos nuevos (en orden de aparición):
+    1. RFC de la Empresa* (text, maxLength 13, uppercase)
+    2. Teléfono de la Empresa* (tel, required)
+    3. Ubicación de la Empresa* (text, required)
+    4. Ubicación de la Obra/Sitio* (text, required)
+    5. ☑ La obra está en la misma ubicación que la empresa (checkbox)
+    6. Link Google Maps* (url, condicional según modalidad)
+    7. WhatsApp del Contratante* (tel, required)
+    8. Fecha de Inicio de Actividades* (date, min=today)
+
+  - Texto explicativo incluido en la sección:
+    "Estos datos ayudan a construir confianza con los candidatos."
+
+  - Lógica del checkbox:
+    Al marcar, copia valor de "Ubicación de la Empresa" → "Ubicación de la Obra"
+    Al desmarcar, limpia "Ubicación de la Obra"
+
+  - Helper text para Google Maps:
+    "El link es opcional solo para vacantes completamente remotas.
+     Para híbrido y presencial es obligatorio."
+
+Formulario de Edición (src/app/recruiter/jobs/[id]/edit/page.tsx):
+  - IDÉNTICO al formulario de creación
+  - Carga valores existentes de la vacante (fetchJob actualizado)
+  - Conversión de fecha: Date → string ISO para el input
+  - Mismo comportamiento de checkbox y condicionales
+
+================================================================================
+5. CAMBIOS EN COMPONENTE DE TARJETA (JobCard)
+================================================================================
+
+Archivo: src/components/jobs/JobCard.tsx
+
+CAMBIOS REALIZADOS:
+
+1) Badge de RFC:
+   - Si job.companyRfc existe, muestra badge verde:
+     "✓ RFC registrado"
+   - Estilo: fondo verde claro, borde verde, texto verde oscuro
+   - Ubicado junto a badges de área laboral y "Presencial"
+
+2) Ubicación:
+   - PRIORIDAD a worksiteLocation sobre location:
+     Muestra: {job.worksiteLocation || job.location}
+   - Si companyLocation existe Y difiere de worksiteLocation:
+     Muestra línea adicional pequeña:
+     "Empresa: {job.companyLocation}"
+   - Estilo: texto secundario (text-xs text-neutral-500)
+
+3) Diseño:
+   - NO se saturó la tarjeta
+   - Se mantuvo escaneable y limpia
+   - Información adicional solo cuando es relevante (RFC presente, ubicaciones diferentes)
+
+================================================================================
+6. MAPEO EN REPOSITORIO
+================================================================================
+
+Archivo: src/infrastructure/supabase/SupabaseJobPostingRepository.ts
+
+CAMBIOS:
+
+1) mapToEntity():
+   - Lee 7 campos en snake_case de la BD
+   - Convierte a camelCase para la entidad
+   - Valores por defecto para backward compatibility:
+     → company_rfc || '' 
+     → company_location || ''
+     → worksite_location || ''
+     → worksite_google_maps_url || ''
+     → contractor_phone_whatsapp || ''
+     → company_phone || ''
+     → start_date ? new Date(start_date) : new Date()
+
+2) create():
+   - INSERT incluye 7 nuevos campos (snake_case)
+   - Mapea desde CreateJobPostingParams (camelCase)
+
+3) update():
+   - UPDATE condicional para cada campo nuevo
+   - Solo actualiza si params.field !== undefined
+   - 7 mapeos: companyRfc → company_rfc, etc.
+
+================================================================================
+7. GUÍA RÁPIDA DE PRUEBA MANUAL
+================================================================================
+
+PASO 1: EJECUTAR MIGRACIÓN EN SUPABASE
+  1. Ir a: https://supabase.com/dashboard/project/fvqaczvjimslzupfrjrm/sql/new
+  2. Pegar contenido de: supabase/migrations/20250123000002_add_job_security_fields.sql
+  3. Ejecutar (RUN)
+  4. Verificar: SELECT company_rfc, start_date FROM job_postings LIMIT 1;
+     (las columnas deben existir)
+
+PASO 2: PROBAR LOCALMENTE - VACANTE PRESENCIAL/HÍBRIDA
+  1. Ir a: http://localhost:3000/recruiter/jobs/new
+  2. Llenar todos los campos básicos (título, descripción, etc.)
+  3. En sección "Datos de Seguridad de la Vacante":
+     - RFC de la Empresa: ABCD120101ABC (12 o 13 caracteres)
+     - Teléfono de la Empresa: 5512345678
+     - Ubicación de la Empresa: CDMX, México
+     - Ubicación de la Obra: Monterrey, NL
+     - Link Google Maps: https://maps.google.com/maps?q=monterrey (OBLIGATORIO)
+     - WhatsApp del Contratante: 5587654321
+     - Fecha de Inicio: seleccionar fecha futura
+  4. Publicar vacante
+  5. Verificar:
+     - Creación exitosa sin errores
+     - En la tarjeta de la vacante se muestra:
+       → Badge verde "✓ RFC registrado"
+       → Ubicación principal: "Monterrey, NL"
+       → Línea secundaria: "Empresa: CDMX, México"
+
+PASO 3: PROBAR LOCALMENTE - VACANTE REMOTA
+  1. Crear nueva vacante
+  2. Seleccionar Modalidad: "Remoto"
+  3. Llenar sección "Datos de Seguridad":
+     - Todos los campos excepto Link Google Maps
+     - Nota: El campo Google Maps debe mostrar "(opcional)"
+  4. Dejar Google Maps vacío
+  5. Publicar vacante
+  6. Verificar:
+     - Creación exitosa SIN requerir Google Maps
+     - Badge RFC presente
+     - Ubicación mostrada correctamente
+
+PASO 4: PROBAR CHECKBOX DE UBICACIÓN
+  1. Crear nueva vacante
+  2. Llenar "Ubicación de la Empresa": CDMX
+  3. Marcar checkbox "La obra está en la misma ubicación que la empresa"
+  4. Verificar:
+     - Campo "Ubicación de la Obra" se llena automáticamente con "CDMX"
+  5. Desmarcar checkbox
+  6. Verificar:
+     - Campo "Ubicación de la Obra" se limpia
+
+PASO 5: PROBAR VALIDACIONES
+  1. Intentar crear vacante presencial SIN Google Maps → Error esperado
+  2. Intentar RFC con 10 caracteres → Error de validación (mínimo 12)
+  3. Intentar teléfono con 5 caracteres → Error de validación (mínimo 8)
+  4. Verificar que NO se puede seleccionar fecha pasada en "Fecha de Inicio"
+
+PASO 6: EDITAR VACANTE EXISTENTE
+  1. Ir a editar una vacante recién creada
+  2. Verificar que todos los campos de seguridad están cargados
+  3. Modificar RFC, ubicaciones, o fecha
+  4. Guardar cambios
+  5. Verificar que se actualizan correctamente
+
+PASO 7: DEPLOY A PRODUCCIÓN
+  1. Asegurarse de que la migración se ejecutó en Supabase producción
+  2. Deploy: vercel --prod
+  3. Esperar build completion
+  4. Probar en producción: crear vacante con todos los campos
+  5. Verificar JobCard muestra badge RFC y ubicaciones correctamente
+
+================================================================================
+8. QUÉ SE VE DISTINTO AHORA EN LA TARJETA DE VACANTE
+================================================================================
+
+ANTES:
+  - Solo mostraba job.location
+  - No había información de RFC o empresa
+
+AHORA:
+  - Muestra worksiteLocation (ubicación de la obra) con prioridad
+  - Badge verde "✓ RFC registrado" si la empresa proporcionó RFC
+  - Si la empresa está en ubicación diferente a la obra:
+    → Línea adicional pequeña: "Empresa: [ciudad]"
+  - Diseño limpio, sin saturación visual
+
+BENEFICIOS:
+  - Mayor transparencia: candidatos ven dónde realmente trabajarán (obra)
+  - Confianza: badge de RFC indica datos empresariales registrados
+  - Contexto: ubicación de empresa visible cuando difiere del sitio de trabajo
+
+================================================================================
+9. ARCHIVOS MODIFICADOS (RESUMEN)
+================================================================================
+
+BASE DE DATOS:
+  ✅ supabase/migrations/20250123000002_add_job_security_fields.sql (nuevo)
+
+DOMINIO:
+  ✅ src/domain/entities/JobPosting.ts (extendido)
+
+APLICACIÓN:
+  ✅ src/application/dto/CreateJobPostingDTO.ts (extendido)
+  ✅ src/application/use-cases/recruiter/CreateJobPosting.ts (validaciones agregadas)
+  ✅ src/application/use-cases/recruiter/UpdateJobPosting.ts (validaciones agregadas)
+
+INFRAESTRUCTURA:
+  ✅ src/infrastructure/supabase/SupabaseJobPostingRepository.ts (mapeo extendido)
+
+PRESENTACIÓN:
+  ✅ src/app/recruiter/jobs/new/page.tsx (sección "Datos de Seguridad" agregada)
+  ✅ src/app/recruiter/jobs/[id]/edit/page.tsx (sección "Datos de Seguridad" agregada)
+  ✅ src/components/jobs/JobCard.tsx (badge RFC + ubicación dual)
+
+TOTAL: 9 archivos modificados/creados
+
+================================================================================
+10. NOTAS IMPORTANTES
+================================================================================
+
+- NO se modificó nada de Iteración 1 (KYC, Terms & Conditions)
+- NO se renombraron archivos ni carpetas existentes
+- SOLO se agregaron campos y validaciones sobre lo que ya funcionaba
+- Arquitectura hexagonal respetada: validaciones en capa de aplicación
+- Backward compatible: vacantes viejas sin estos campos siguen funcionando
+- DTOs separados de entidades: capa de aplicación limpia
+- Formularios idénticos en create y edit: consistencia UX
+
+================================================================================
+FIN DEL RESUMEN - ITERACIÓN 2
+================================================================================

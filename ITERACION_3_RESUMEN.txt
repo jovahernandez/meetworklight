@@ -1,0 +1,405 @@
+================================================================================
+  ITERACIÓN 3: Vigencia y Urgencia de Vacantes
+  Fecha: 23 de enero de 2025
+================================================================================
+
+OBJETIVO:
+Dar vigencia real a las vacantes con un ciclo de vida de 7-30 días. El reclutador
+elige la duración mediante un slider, se calcula automáticamente la fecha de
+expiración, las vacantes vencidas se ocultan para buscadores, y el reclutador
+recibe avisos visuales cuando sus vacantes están por expirar.
+
+NO se refactorizó nada. SOLO se extendió: schema, entidad, DTOs, casos de uso,
+repositorio, formularios y dashboard del reclutador.
+
+================================================================================
+1. NUEVAS COLUMNAS EN LA BASE DE DATOS (tabla: job_postings)
+================================================================================
+
+ALTER TABLE public.job_postings
+    ADD COLUMN IF NOT EXISTS validity_days INTEGER,
+    ADD COLUMN IF NOT EXISTS expires_at DATE;
+
+Archivo: supabase/migrations/20250123000003_add_job_validity_fields.sql
+
+COMPORTAMIENTO:
+- Ambas columnas NULL por defecto (backward compatible con vacantes viejas).
+- Vacantes NUEVAS (creadas después de esta iteración):
+  - validity_days: siempre entre 7 y 30 (validado en backend).
+  - expires_at: calculada automáticamente como (fecha actual + validity_days).
+- Vacantes VIEJAS (anteriores a esta iteración):
+  - expires_at = NULL → se siguen mostrando como activas hasta que se editen.
+  - Al editar y elegir vigencia → entran al nuevo flujo.
+
+================================================================================
+2. NUEVOS CAMPOS EN ENTIDADES Y DTOs
+================================================================================
+
+Entidad de Dominio (src/domain/entities/JobPosting.ts):
+  - validityDays: number;  // 7-30 días
+  - expiresAt: Date;       // Fecha de expiración calculada
+
+DTOs de Aplicación (src/application/dto/CreateJobPostingDTO.ts):
+  CreateJobPostingDTO:
+    - validityDays: number;  // requerido, viene del slider
+
+  UpdateJobPostingDTO:
+    - validityDays?: number; // opcional, si viene → recalcula expiresAt
+
+IMPORTANTE:
+- El frontend NO envía expiresAt directamente.
+- El frontend SOLO envía validityDays desde el slider.
+- El backend (casos de uso) calcula expiresAt usando la fecha actual del servidor.
+
+================================================================================
+3. VALIDACIONES Y CÁLCULO DE EXPIRACIÓN
+================================================================================
+
+A) VALIDACIÓN DE validityDays
+
+En CreateJobPosting:
+  - Campo obligatorio.
+  - Rango: entre 7 y 30 días (inclusive).
+  - Error: "Validity must be between 7 and 30 days"
+
+En UpdateJobPosting:
+  - Si se proporciona: validar rango 7-30.
+  - Si NO se proporciona: mantener expires_at existente.
+
+B) CÁLCULO DE expiresAt (BACKEND AUTHORITY)
+
+En CreateJobPosting:
+  ```
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const expiresAt = new Date(today.getTime() + (validityDays * 24 * 60 * 60 * 1000));
+  ```
+
+En UpdateJobPosting:
+  - Si llega validityDays:
+    ```
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    expiresAt = new Date(today.getTime() + (validityDays * 24 * 60 * 60 * 1000));
+    ```
+  - Si NO llega validityDays: no recalcula, mantiene expires_at existente.
+
+REGLA CLAVE:
+- El backend usa su propia fecha actual (no confía en el frontend).
+- Esto garantiza consistencia y previene manipulación.
+
+================================================================================
+4. FILTRADO DE VACANTES PARA BUSCADORES
+================================================================================
+
+Caso de Uso: FilterJobPostings
+Archivo: src/infrastructure/supabase/SupabaseJobPostingRepository.ts
+
+NUEVA LÓGICA EN findAll():
+```sql
+WHERE status = 'active'
+  AND (expires_at IS NULL OR expires_at >= CURRENT_DATE)
+```
+
+COMPORTAMIENTO:
+- Vacantes con expires_at = NULL → se muestran (vacantes viejas).
+- Vacantes con expires_at >= hoy → se muestran (vigentes).
+- Vacantes con expires_at < hoy → NO se muestran (expiradas).
+
+Resultado:
+- Los buscadores SOLO ven vacantes activas y vigentes.
+- Las vacantes expiradas desaparecen automáticamente de la búsqueda.
+
+================================================================================
+5. CÁLCULO DE ESTADO Y DÍAS RESTANTES (PARA RECLUTADOR)
+================================================================================
+
+Dashboard del Reclutador (src/app/recruiter/jobs/page.tsx)
+
+FUNCIÓN getJobStatus(job):
+```javascript
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+const expiresDate = new Date(job.expiresAt);
+expiresDate.setHours(0, 0, 0, 0);
+
+const diffTime = expiresDate.getTime() - today.getTime();
+const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+if (daysLeft < 0) {
+    return { status: 'expired', daysLeft, message: '...' };
+} else if (daysLeft <= 3) {
+    return { status: 'expiring_soon', daysLeft, message: '...' };
+} else {
+    return { status: 'active', daysLeft, message: null };
+}
+```
+
+ESTADOS:
+1. "expired" (daysLeft < 0):
+   - Badge: 🔴 Expirada (rojo)
+   - Mensaje: "Esta vacante ya no se muestra a los candidatos"
+
+2. "expiring_soon" (0 <= daysLeft <= 3):
+   - Badge: ⚠️ Por expirar (naranja)
+   - Mensaje: "Tu vacante expira en X días. Actualízala o se desactivará"
+
+3. "active" (daysLeft > 3 OR expires_at IS NULL):
+   - Badge: 📅 X días restantes (azul)
+   - Sin mensaje de advertencia.
+
+================================================================================
+6. CAMBIOS EN FORMULARIOS DE CREACIÓN/EDICIÓN
+================================================================================
+
+Archivos:
+- src/app/recruiter/jobs/new/page.tsx
+- src/app/recruiter/jobs/[id]/edit/page.tsx
+
+NUEVA SECCIÓN: "⏱ Duración y nivel de urgencia"
+Ubicación: Después de "Datos de Seguridad", antes de campos de contacto.
+
+CONTENIDO:
+
+1) Slider de Vigencia:
+   - Label: "Vigencia de la vacante: {X} días"
+   - Input type="range", min="7", max="30", step="1"
+   - Valor por defecto:
+     - Crear: 30 días
+     - Editar: job.validityDays (o 30 si no existe)
+
+2) Nivel de Urgencia (calculado en frontend, solo visual):
+   - 7-10 días → 🔴 Alta (texto rojo)
+   - 11-20 días → 🟡 Media (texto amarillo)
+   - 21-30 días → 🟢 Baja (texto verde)
+
+3) Fecha de Expiración (calculada en frontend, solo vista previa):
+   - "Activa hasta: [fecha formateada]"
+   - Calcula: today + validityDays días
+   - Formato: "23 de enero de 2025" (es-MX)
+
+4) Tip:
+   - "💡 Tip: Las vacantes con urgencia alta (7-10 días) aparecen destacadas"
+
+VALIDACIÓN:
+- El slider es requerido (no se puede submit sin seleccionar).
+- El backend valida rango 7-30 y rechaza si está fuera.
+
+================================================================================
+7. CAMBIOS EN DASHBOARD DEL RECLUTADOR
+================================================================================
+
+Archivo: src/app/recruiter/jobs/page.tsx
+
+CAMBIOS VISUALES:
+
+1) Interface Job extendida:
+   - validityDays: number
+   - expiresAt: string
+
+2) Badges de Estado (junto a badge "Activa/Inactiva"):
+   
+   VACANTE EXPIRADA:
+   - Badge rojo: "🔴 Expirada"
+   - Mensaje debajo del título: fondo rojo claro
+     "Esta vacante ya no se muestra a los candidatos"
+
+   VACANTE POR EXPIRAR (0-3 días):
+   - Badge naranja: "⚠️ Por expirar"
+   - Mensaje debajo del título: fondo naranja claro
+     "Tu vacante expira en X días. Actualízala o se desactivará"
+
+   VACANTE ACTIVA (> 3 días):
+   - Badge azul: "📅 X días restantes"
+   - Sin mensaje de advertencia.
+
+3) Acciones:
+   - Botón "Ver Detalles" funciona igual que antes.
+   - NO se bloquea la edición de vacantes expiradas.
+   - El reclutador puede actualizar vigencia editando la vacante.
+
+================================================================================
+8. MAPEO EN REPOSITORIO
+================================================================================
+
+Archivo: src/infrastructure/supabase/SupabaseJobPostingRepository.ts
+
+1) create():
+   - Incluye validity_days y expires_at en INSERT.
+   - Mapea desde CreateJobPostingParams (camelCase → snake_case).
+
+2) update():
+   - Actualiza validity_days si params.validityDays !== undefined.
+   - Actualiza expires_at si params.expiresAt !== undefined.
+
+3) mapToEntity():
+   - Lee validity_days y expires_at de la BD.
+   - Convierte a camelCase para la entidad.
+   - Defaults para backward compatibility:
+     → validityDays: data.validity_days || 30
+     → expiresAt: data.expires_at ? new Date(data.expires_at) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+
+4) findAll() - Filtro para Buscadores:
+   - Agrega condición OR en query:
+     `.or(\`expires_at.is.null,expires_at.gte.${today}\`)`
+   - Solo muestra vacantes con expires_at = NULL O expires_at >= hoy.
+
+================================================================================
+9. GUÍA RÁPIDA DE PRUEBA MANUAL
+================================================================================
+
+PASO 1: EJECUTAR MIGRACIÓN EN SUPABASE
+  1. Ir a: https://supabase.com/dashboard/project/fvqaczvjimslzupfrjrm/sql/new
+  2. Pegar contenido de: supabase/migrations/20250123000003_add_job_validity_fields.sql
+  3. Ejecutar (RUN)
+  4. Verificar: SELECT validity_days, expires_at FROM job_postings LIMIT 1;
+
+PASO 2: CREAR VACANTE CON VIGENCIA CORTA (URGENTE)
+  1. Ir a: /recruiter/jobs/new
+  2. Llenar todos los campos requeridos.
+  3. En sección "Duración y nivel de urgencia":
+     - Mover slider a 7 días.
+     - Verificar que muestra "Nivel de urgencia: 🔴 Alta".
+     - Verificar fecha de expiración = hoy + 7 días.
+  4. Publicar vacante.
+  5. Verificar en dashboard:
+     - Badge "📅 7 días restantes" (o 6, dependiendo del tiempo transcurrido).
+     - Sin mensaje de advertencia todavía.
+
+PASO 3: CREAR VACANTE CON VIGENCIA MEDIA
+  1. Crear nueva vacante.
+  2. Slider en 15 días.
+  3. Verificar "Nivel de urgencia: 🟡 Media".
+  4. Publicar.
+  5. Dashboard muestra: "📅 15 días restantes".
+
+PASO 4: CREAR VACANTE CON VIGENCIA LARGA
+  1. Crear nueva vacante.
+  2. Slider en 30 días (default).
+  3. Verificar "Nivel de urgencia: 🟢 Baja".
+  4. Publicar.
+  5. Dashboard muestra: "📅 30 días restantes".
+
+PASO 5: EDITAR VACANTE Y CAMBIAR VIGENCIA
+  1. Editar una vacante existente.
+  2. Cambiar slider de 30 a 10 días.
+  3. Guardar cambios.
+  4. Verificar:
+     - expires_at se recalcula desde HOY (no desde la fecha original).
+     - Dashboard actualiza el badge de días restantes.
+
+PASO 6: SIMULAR VACANTE POR EXPIRAR
+  (Nota: Requiere modificar manualmente expires_at en BD o esperar 27+ días)
+  1. En Supabase SQL Editor:
+     UPDATE job_postings 
+     SET expires_at = CURRENT_DATE + INTERVAL '2 days'
+     WHERE id = 'xxx';
+  2. Ir al dashboard del reclutador.
+  3. Verificar:
+     - Badge naranja: "⚠️ Por expirar"
+     - Mensaje: "Tu vacante expira en 2 días..."
+
+PASO 7: SIMULAR VACANTE EXPIRADA
+  1. En Supabase SQL Editor:
+     UPDATE job_postings 
+     SET expires_at = CURRENT_DATE - INTERVAL '1 day'
+     WHERE id = 'xxx';
+  2. Dashboard del reclutador:
+     - Badge rojo: "🔴 Expirada"
+     - Mensaje: "Esta vacante ya no se muestra a los candidatos"
+  3. Ir a búsqueda de vacantes (/jobs):
+     - La vacante expirada NO aparece en resultados.
+
+PASO 8: VERIFICAR BACKWARD COMPATIBILITY
+  1. Si hay vacantes viejas (anteriores a migración):
+     - expires_at = NULL → se muestran en búsqueda.
+     - Dashboard muestra badge normal sin días restantes.
+  2. Al editar vacante vieja:
+     - Forzar a elegir vigencia con slider.
+     - Guardar → ahora tiene expires_at calculado.
+
+PASO 9: DEPLOY A PRODUCCIÓN
+  1. Ejecutar migración en Supabase producción.
+  2. Deploy: vercel --prod
+  3. Probar en producción:
+     - Crear vacante con 7 días → verificar badge urgencia alta.
+     - Verificar filtrado de vacantes expiradas en búsqueda.
+     - Verificar dashboard muestra avisos correctamente.
+
+================================================================================
+10. QUÉ SE VE NUEVO EN EL SISTEMA
+================================================================================
+
+FORMULARIO DE CREAR/EDITAR VACANTE:
+- Nueva sección naranja: "⏱ Duración y nivel de urgencia"
+- Slider interactivo 7-30 días.
+- Nivel de urgencia dinámico (Alta/Media/Baja) según slider.
+- Fecha de expiración calculada en tiempo real.
+- Tip sobre vacantes urgentes.
+
+DASHBOARD DEL RECLUTADOR (/recruiter/jobs):
+- Badge de estado de vigencia en cada vacante:
+  - "🔴 Expirada" → fondo rojo
+  - "⚠️ Por expirar" → fondo naranja
+  - "📅 X días restantes" → fondo azul
+- Mensajes de advertencia para vacantes expiradas/por expirar.
+- Claridad visual sobre cuánto tiempo queda antes de que expire.
+
+BÚSQUEDA DE VACANTES (/jobs):
+- Las vacantes expiradas YA NO aparecen en resultados.
+- Los candidatos SOLO ven vacantes vigentes (expires_at >= hoy).
+- Vacantes viejas (expires_at = NULL) siguen visibles hasta editarse.
+
+BENEFICIOS:
+- Control de ciclo de vida: las vacantes no quedan obsoletas indefinidamente.
+- Urgencia visible: vacantes de 7-10 días destacan (futuro: orden prioritario).
+- Avisos proactivos: el reclutador sabe cuándo renovar sus publicaciones.
+- Limpieza automática: vacantes expiradas se ocultan sin intervención manual.
+
+================================================================================
+11. ARCHIVOS MODIFICADOS (RESUMEN)
+================================================================================
+
+BASE DE DATOS:
+  ✅ supabase/migrations/20250123000003_add_job_validity_fields.sql (nuevo)
+
+DOMINIO:
+  ✅ src/domain/entities/JobPosting.ts (extendido)
+
+APLICACIÓN:
+  ✅ src/application/dto/CreateJobPostingDTO.ts (extendido)
+  ✅ src/application/use-cases/recruiter/CreateJobPosting.ts (validación + cálculo)
+  ✅ src/application/use-cases/recruiter/UpdateJobPosting.ts (recálculo condicional)
+
+INFRAESTRUCTURA:
+  ✅ src/infrastructure/supabase/SupabaseJobPostingRepository.ts (mapeo + filtro)
+
+PRESENTACIÓN:
+  ✅ src/app/recruiter/jobs/new/page.tsx (sección vigencia agregada)
+  ✅ src/app/recruiter/jobs/[id]/edit/page.tsx (sección vigencia agregada)
+  ✅ src/app/recruiter/jobs/page.tsx (badges de estado + función getJobStatus)
+
+TOTAL: 9 archivos modificados/creados
+
+================================================================================
+12. NOTAS IMPORTANTES
+================================================================================
+
+- NO se modificó nada de Iteración 1 (KYC) ni Iteración 2 (Seguridad).
+- NO se implementaron emails reales todavía (no hay INotificationService).
+- NO hay cron jobs para notificaciones automáticas (posible Iteración 4).
+- Arquitectura hexagonal respetada: lógica de cálculo en casos de uso.
+- Backward compatible: vacantes viejas funcionan sin expires_at.
+- Frontend NO puede manipular expires_at (backend authority).
+- Nivel de urgencia es solo visual (NO se guarda en BD como columna).
+
+FUTURAS MEJORAS (NO IMPLEMENTADAS):
+- Ordenar vacantes urgentes primero en búsqueda.
+- Emails automáticos 3 días antes de expiración.
+- Cron job diario para marcar expiradas como inactivas.
+- Opción "Renovar por 30 días más" sin editar toda la vacante.
+- Analytics: tasa de conversión según vigencia elegida.
+
+================================================================================
+FIN DEL RESUMEN - ITERACIÓN 3
+================================================================================

@@ -6,11 +6,11 @@ export default function HomePage() {
         <div className="container mx-auto px-4 py-16">
             <div className="max-w-4xl mx-auto text-center space-y-8">
                 <h1 className="text-5xl font-heading font-bold text-neutral-900">
-                    Conectamos Talento Industrial con Oportunidades Reales
+                    Conectamos Talento de la Construcción con Oportunidades Reales
                 </h1>
                 <p className="text-xl text-neutral-700 max-w-2xl mx-auto">
-                    Meetwork es la plataforma especializada en el sector industrial de México.
-                    Encuentra tu próxima oportunidad en construcción, logística, manufactura, energía y más.
+                    Meetwork es la plataforma especializada en el sector de la construcción en México.
+                    Encuentra tu próxima oportunidad laboral presencial en obras, proyectos y empresas constructoras.
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4 justify-center items-center pt-8">
@@ -35,7 +35,7 @@ export default function HomePage() {
                         </div>
                         <h3 className="font-heading font-bold text-lg mb-2">Vacantes Especializadas</h3>
                         <p className="text-neutral-600">
-                            Oportunidades en los principales sectores industriales de México
+                            Oportunidades en el sector de la construcción en toda la República Mexicana
                         </p>
                     </div>
 

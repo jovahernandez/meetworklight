@@ -3,6 +3,17 @@ import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';
 
+// Add CORS headers
+const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+export async function OPTIONS(request: NextRequest) {
+    return NextResponse.json({}, { headers: corsHeaders });
+}
+
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
@@ -11,7 +22,7 @@ export async function POST(request: NextRequest) {
         if (!email || !password) {
             return NextResponse.json(
                 { error: 'Email y contraseña son requeridos' },
-                { status: 400 }
+                { status: 400, headers: corsHeaders }
             );
         }
 
@@ -29,20 +40,20 @@ export async function POST(request: NextRequest) {
             if (authError.message?.includes('already registered')) {
                 return NextResponse.json(
                     { error: 'Este correo electrónico ya está registrado' },
-                    { status: 409 }
+                    { status: 409, headers: corsHeaders }
                 );
             }
 
             return NextResponse.json(
                 { error: authError.message },
-                { status: 400 }
+                { status: 400, headers: corsHeaders }
             );
         }
 
         if (!authData.user) {
             return NextResponse.json(
                 { error: 'No se pudo crear el usuario' },
-                { status: 500 }
+                { status: 500, headers: corsHeaders }
             );
         }
 
@@ -70,7 +81,7 @@ export async function POST(request: NextRequest) {
                 createdAt: authData.user.created_at,
             },
             message: 'Usuario registrado exitosamente. Por favor selecciona tu tipo de perfil.',
-        });
+        }, { headers: corsHeaders });
     } catch (error: any) {
         console.error('Error in register endpoint:', error);
 

@@ -19,9 +19,14 @@ export async function GET(request: NextRequest) {
             );
         }
 
+        console.log('🔍 DEBUG - Fetching jobs for user:', user.id);
+
         const jobRepo = new SupabaseJobPostingRepository();
         const listJobsUseCase = new ListOwnJobPostings(jobRepo);
         const jobs = await listJobsUseCase.execute(user.id);
+
+        console.log('📋 DEBUG - Found jobs:', jobs.length);
+        console.log('📋 DEBUG - Jobs data:', JSON.stringify(jobs, null, 2));
 
         return NextResponse.json({
             success: true,
@@ -51,11 +56,16 @@ export async function POST(request: NextRequest) {
 
         const body = await request.json();
 
+        console.log('✏️ DEBUG - Creating job for user:', user.id);
+        console.log('✏️ DEBUG - Job data:', JSON.stringify(body, null, 2));
+
         const jobPostingRepo = new SupabaseJobPostingRepository();
         const recruiterProfileRepo = new SupabaseRecruiterProfileRepository();
 
         const createJobUseCase = new CreateJobPosting(jobPostingRepo, recruiterProfileRepo);
         const job = await createJobUseCase.execute(user.id, body);
+
+        console.log('✅ DEBUG - Job created:', job.id);
 
         return NextResponse.json({
             success: true,
@@ -64,6 +74,13 @@ export async function POST(request: NextRequest) {
         }, { status: 201 });
     } catch (error: any) {
         console.error('Error in POST recruiter job:', error);
+
+        if (error.message?.includes('Only recruiters can create job postings')) {
+            return NextResponse.json(
+                { error: 'Solo los reclutadores pueden crear vacantes. Cambia tu rol desde tu perfil.' },
+                { status: 403 }
+            );
+        }
 
         if (error.message?.includes('profile not found')) {
             return NextResponse.json(

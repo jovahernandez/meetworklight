@@ -8,7 +8,14 @@ export async function POST(request: NextRequest) {
         const supabase = await createClient();
         const { data: { user }, error: authError } = await supabase.auth.getUser();
 
+        console.log('🔍 Seeker Profile API - Auth check:', {
+            hasUser: !!user,
+            userId: user?.id,
+            authError: authError?.message
+        });
+
         if (authError || !user) {
+            console.error('❌ No autorizado:', authError);
             return NextResponse.json(
                 { success: false, error: 'No autorizado' },
                 { status: 401 }
@@ -16,6 +23,8 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
+        console.log('📝 Body recibido:', body);
+
         const { fullName, phone, location, preferredSector, experienceLevel, skills, bio } = body;
 
         // Insert seeker profile

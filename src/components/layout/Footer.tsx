@@ -4,7 +4,7 @@ export function Footer() {
             <div className="container mx-auto px-4 py-8">
                 <div className="text-center">
                     <p className="text-sm">
-                        © {new Date().getFullYear()} Meetwork. Conectando talento industrial con oportunidades reales.
+                        © {new Date().getFullYear()} Meetwork. Conectando talento de la construcción con oportunidades reales.
                     </p>
                 </div>
             </div>

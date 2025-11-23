@@ -70,7 +70,7 @@ export default function ChooseRolePage() {
                                 Busco Trabajo
                             </h3>
                             <p className="text-neutral-600 mb-6">
-                                Explora vacantes y encuentra oportunidades en el sector industrial
+                                Explora vacantes y encuentra oportunidades en el sector de la construcción
                             </p>
                             <Button
                                 variant="primary"
