@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { CONTRACT_TYPES, MODALITIES, SHIFTS } from '@/lib/constants';
 import { formatRelativeTime } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 interface JobCardProps {
     job: JobPosting;
@@ -13,7 +14,38 @@ export function JobCard({ job }: JobCardProps) {
     const router = useRouter();
 
     return (
-        <Card className="hover:shadow-lg transition-shadow">
+        <Card className="hover:shadow-lg transition-shadow overflow-hidden">
+            {/* Iteración 6: Imagen prominente de la vacante */}
+            {job.imageUrl && (
+                <div className="relative w-full h-48 md:h-56 bg-neutral-100">
+                    <Image
+                        src={job.imageUrl}
+                        alt={`Imagen de vacante: ${job.title}`}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    />
+                    {/* Badge de estado de imagen si está pendiente */}
+                    {job.imageStatus === 'pending' && (
+                        <div className="absolute top-2 right-2 bg-yellow-100 text-yellow-800 text-xs font-medium px-2 py-1 rounded-full border border-yellow-300">
+                            En revisión
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Placeholder si no hay imagen */}
+            {!job.imageUrl && (
+                <div className="relative w-full h-32 md:h-40 bg-gradient-to-br from-primary-50 to-accent-50 flex items-center justify-center">
+                    <div className="text-center">
+                        <svg className="w-12 h-12 mx-auto text-primary-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <p className="text-xs text-primary-400 mt-1">{job.jobArea}</p>
+                    </div>
+                </div>
+            )}
+
             <CardContent className="space-y-3 md:space-y-4 p-4 md:p-6">
                 <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
@@ -89,23 +121,13 @@ export function JobCard({ job }: JobCardProps) {
                     Ver Más Detalles
                 </Button>
 
-                <div className="pt-3 md:pt-4 border-t border-neutral-200 space-y-2">
-                    <p className="text-xs font-medium text-neutral-900 uppercase tracking-wide">
-                        Contacto
-                    </p>
-                    <div className="flex flex-col gap-1.5 text-sm text-neutral-700">
-                        <a href={`tel:${job.contactPhone}`} className="flex items-center hover:text-primary transition-colors active:text-primary-dark">
-                            <svg className="w-4 h-4 mr-2 flex-shrink-0 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                            </svg>
-                            <span className="truncate">{job.contactPhone}</span>
-                        </a>
-                        <a href={`mailto:${job.contactEmail}`} className="flex items-center hover:text-primary transition-colors active:text-primary-dark">
-                            <svg className="w-4 h-4 mr-2 flex-shrink-0 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                            </svg>
-                            <span className="truncate">{job.contactEmail}</span>
-                        </a>
+                {/* Iteración 6: Info de contacto oculta en listado - solo visible en detalle con cuenta */}
+                <div className="pt-3 md:pt-4 border-t border-neutral-200">
+                    <div className="flex items-center gap-2 text-sm text-neutral-500">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        <span>Información de contacto disponible al ver detalles</span>
                     </div>
                 </div>
             </CardContent>

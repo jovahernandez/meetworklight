@@ -66,6 +66,66 @@ export class DummyNotificationService implements INotificationService {
         // Simular delay de red (opcional, para testing)
         await new Promise(resolve => setTimeout(resolve, 100));
     }
+
+    /**
+     * Iteración 6: Simula notificación de vacante publicada.
+     */
+    async notifyJobPublished(
+        userId: string,
+        jobPostingId: string,
+        jobTitle: string,
+        userEmail: string
+    ): Promise<void> {
+        console.log('========================================');
+        console.log('[DUMMY NOTIFICATION] Vacante publicada');
+        console.log('========================================');
+        console.log(`Usuario:      ${userId}`);
+        console.log(`Email:        ${userEmail}`);
+        console.log(`Vacante ID:   ${jobPostingId}`);
+        console.log(`Título:       ${jobTitle}`);
+        console.log('Acción:       Enviar email "Tu vacante ha sido publicada"');
+        console.log('========================================\n');
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    /**
+     * Iteración 6: Simula notificación de rol de reclutador por expirar.
+     */
+    async notifyRecruiterRoleExpiring(
+        userId: string,
+        userEmail: string,
+        daysLeft: number
+    ): Promise<void> {
+        console.log('========================================');
+        console.log('[DUMMY NOTIFICATION] Rol de reclutador por expirar');
+        console.log('========================================');
+        console.log(`Usuario:      ${userId}`);
+        console.log(`Email:        ${userEmail}`);
+        console.log(`Días restantes: ${daysLeft}`);
+        console.log('Acción:       Enviar email "Tu rol de reclutador expira pronto"');
+        console.log('========================================\n');
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    /**
+     * Iteración 6: Simula notificación de rol de reclutador expirado.
+     */
+    async notifyRecruiterRoleExpired(
+        userId: string,
+        userEmail: string
+    ): Promise<void> {
+        console.log('========================================');
+        console.log('[DUMMY NOTIFICATION] Rol de reclutador expirado');
+        console.log('========================================');
+        console.log(`Usuario:      ${userId}`);
+        console.log(`Email:        ${userEmail}`);
+        console.log('Acción:       Enviar email "Tu rol de reclutador ha expirado"');
+        console.log('========================================\n');
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
 }
 
 /**

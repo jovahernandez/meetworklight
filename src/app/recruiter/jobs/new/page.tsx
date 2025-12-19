@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
+import { PostalCodeInput } from '@/components/ui/PostalCodeInput';
 import { JOB_AREAS, CONTRACT_TYPES, SHIFTS } from '@/lib/constants';
+import { createClient } from '@/lib/supabase/client';
 
 const INDUSTRIAL_SECTORS = [
     'Construcción',
@@ -22,6 +24,11 @@ export default function CreateJobPage() {
     const [error, setError] = useState('');
     const [tasks, setTasks] = useState<string[]>(['']);
     const [sameLocation, setSameLocation] = useState(false);
+    // Iteración 6: Estado para imagen
+    const [imageFile, setImageFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [uploadingImage, setUploadingImage] = useState(false);
+
     const [formData, setFormData] = useState({
         title: '',
         companyName: '',
@@ -49,6 +56,59 @@ export default function CreateJobPage() {
         validityDays: 30,
     });
 
+    // Iteración 6: Manejar selección de imagen
+    const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            // Validar tamaño (máx 5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                setError('La imagen no debe superar los 5MB');
+                return;
+            }
+            // Validar tipo
+            if (!file.type.startsWith('image/')) {
+                setError('Solo se permiten archivos de imagen');
+                return;
+            }
+            setImageFile(file);
+            setImagePreview(URL.createObjectURL(file));
+            setError('');
+        }
+    };
+
+    // Iteración 6: Subir imagen a Supabase Storage
+    const uploadImage = async (): Promise<string | null> => {
+        if (!imageFile) return null;
+
+        setUploadingImage(true);
+        try {
+            const supabase = createClient();
+            const fileExt = imageFile.name.split('.').pop();
+            const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+
+            const { data, error: uploadError } = await supabase.storage
+                .from('job-images')
+                .upload(fileName, imageFile);
+
+            if (uploadError) {
+                console.error('Error uploading image:', uploadError);
+                throw new Error('Error al subir la imagen');
+            }
+
+            // Obtener URL pública
+            const { data: { publicUrl } } = supabase.storage
+                .from('job-images')
+                .getPublicUrl(fileName);
+
+            return publicUrl;
+        } catch (err) {
+            console.error('Upload error:', err);
+            return null;
+        } finally {
+            setUploadingImage(false);
+        }
+    };
+
     const addTask = () => {
         setTasks([...tasks, '']);
     };
@@ -69,6 +129,17 @@ export default function CreateJobPage() {
         setLoading(true);
 
         try {
+            // Iteración 6: Subir imagen primero si existe
+            let imageUrl: string | null = null;
+            if (imageFile) {
+                imageUrl = await uploadImage();
+                if (!imageUrl && imageFile) {
+                    setError('Error al subir la imagen. Intenta de nuevo.');
+                    setLoading(false);
+                    return;
+                }
+            }
+
             // Convertir tareas a formato de lista
             const tasksList = tasks
                 .filter(task => task.trim())
@@ -92,6 +163,8 @@ export default function CreateJobPage() {
                 startDate: formData.startDate ? new Date(formData.startDate + 'T00:00:00') : new Date(),
                 // Iteración 3: validityDays ya viene como número del slider
                 validityDays: formData.validityDays,
+                // Iteración 6: URL de imagen
+                imageUrl,
             };
 
             const response = await fetch('/api/recruiter/jobs', {
@@ -129,6 +202,67 @@ export default function CreateJobPage() {
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit} className="space-y-5 md:space-y-6">
+                            {/* Iteración 6: Campo de imagen prominente al inicio */}
+                            <div className="space-y-2">
+                                <label className="block text-sm font-medium text-neutral-700">
+                                    Imagen de la Vacante
+                                </label>
+                                <p className="text-xs text-neutral-500 mb-2">
+                                    Sube una imagen atractiva de tu vacante. Solo debe contener información del puesto, NO datos de contacto como teléfonos o correos.
+                                </p>
+
+                                <div className="border-2 border-dashed border-neutral-300 rounded-lg p-4 hover:border-primary transition-colors">
+                                    {imagePreview ? (
+                                        <div className="relative">
+                                            <img
+                                                src={imagePreview}
+                                                alt="Preview"
+                                                className="w-full h-48 object-cover rounded-lg"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setImageFile(null);
+                                                    setImagePreview(null);
+                                                }}
+                                                className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full hover:bg-red-600 transition-colors"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <label className="flex flex-col items-center cursor-pointer py-4">
+                                            <svg className="w-12 h-12 text-neutral-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                            </svg>
+                                            <span className="text-sm text-neutral-600 font-medium">
+                                                Haz clic para subir una imagen
+                                            </span>
+                                            <span className="text-xs text-neutral-500 mt-1">
+                                                PNG, JPG hasta 5MB
+                                            </span>
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleImageChange}
+                                                className="hidden"
+                                            />
+                                        </label>
+                                    )}
+                                </div>
+
+                                <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 p-2 rounded border border-amber-200">
+                                    <svg className="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    <span>
+                                        <strong>Importante:</strong> La imagen será revisada antes de publicarse. No incluyas información privada de contacto en la imagen.
+                                    </span>
+                                </div>
+                            </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                                 <div className="md:col-span-2">
                                     <Input
@@ -338,13 +472,34 @@ export default function CreateJobPage() {
                                         className="text-base"
                                     />
 
+                                    {/* Iteración 6: Código Postal de la Obra con autocompletado */}
+                                    <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                        <h4 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                            Ubicación de la Obra (Autocompletado por CP)
+                                        </h4>
+                                        <PostalCodeInput
+                                            onAddressChange={(data) => {
+                                                setFormData({
+                                                    ...formData,
+                                                    worksiteLocation: data.fullAddress,
+                                                });
+                                            }}
+                                            label="Código Postal de la Obra *"
+                                            required={true}
+                                        />
+                                    </div>
+
                                     <Input
                                         label="Ubicación de la Obra / Sitio de Trabajo *"
                                         type="text"
                                         value={formData.worksiteLocation}
                                         onChange={(e) => setFormData({ ...formData, worksiteLocation: e.target.value })}
                                         required
-                                        placeholder="Ej: San Pedro Garza García, N.L."
+                                        placeholder="Se autocompleta con el CP o escribe manualmente"
                                         className="text-base"
                                     />
 
@@ -509,7 +664,7 @@ export default function CreateJobPage() {
                                     variant="ghost"
                                     className="w-full sm:flex-1 py-3 text-base font-medium"
                                     onClick={() => router.back()}
-                                    disabled={loading}
+                                    disabled={loading || uploadingImage}
                                 >
                                     Cancelar
                                 </Button>
@@ -517,9 +672,9 @@ export default function CreateJobPage() {
                                     type="submit"
                                     variant="primary"
                                     className="w-full sm:flex-1 py-3 text-base font-medium"
-                                    disabled={loading}
+                                    disabled={loading || uploadingImage}
                                 >
-                                    {loading ? 'Publicando...' : 'Publicar Vacante'}
+                                    {uploadingImage ? 'Subiendo imagen...' : loading ? 'Publicando...' : 'Publicar Vacante'}
                                 </Button>
                             </div>
                         </form>

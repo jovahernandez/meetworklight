@@ -32,6 +32,9 @@ export interface JobPosting {
     // Iteración 3.1: Vigencia (expiresAt puede ser null para vacantes viejas)
     validityDays: number;
     expiresAt: Date | null;
+    // Iteración 6: Imagen de vacante
+    imageUrl?: string;
+    imageStatus?: 'pending' | 'approved' | 'rejected' | 'none';
 }
 
 export interface CreateJobPostingParams {
@@ -60,6 +63,8 @@ export interface CreateJobPostingParams {
     // Iteración 3.1: Vigencia
     validityDays: number;
     expiresAt: Date; // Calculado en backend
+    // Iteración 6: Imagen de vacante
+    imageUrl?: string;
 }
 
 export interface UpdateJobPostingParams {
@@ -88,4 +93,6 @@ export interface UpdateJobPostingParams {
     // Iteración 3.1: Vigencia
     validityDays?: number;
     expiresAt?: Date; // Recalculado si cambia validityDays
+    // Iteración 6: Imagen de vacante
+    imageUrl?: string;
 }

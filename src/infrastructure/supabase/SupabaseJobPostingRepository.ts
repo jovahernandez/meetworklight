@@ -163,6 +163,9 @@ export class SupabaseJobPostingRepository implements IJobPostingRepository {
                 // Iteración 3.1: Vigencia
                 validity_days: params.validityDays,
                 expires_at: params.expiresAt,
+                // Iteración 6: Imagen de vacante
+                image_url: params.imageUrl,
+                image_status: params.imageUrl ? 'pending' : 'none',
             })
             .select()
             .single();
@@ -201,6 +204,11 @@ export class SupabaseJobPostingRepository implements IJobPostingRepository {
         // Iteración 3.1: Vigencia
         if (params.validityDays !== undefined) updateData.validity_days = params.validityDays;
         if (params.expiresAt !== undefined) updateData.expires_at = params.expiresAt;
+        // Iteración 6: Imagen de vacante
+        if (params.imageUrl !== undefined) {
+            updateData.image_url = params.imageUrl;
+            updateData.image_status = params.imageUrl ? 'pending' : 'none';
+        }
 
         const { data, error } = await supabase
             .from('job_postings')
@@ -258,6 +266,9 @@ export class SupabaseJobPostingRepository implements IJobPostingRepository {
             // Iteración 3.1: Vigencia (sin inventar fechas para vacantes viejas)
             validityDays: data.validity_days || 30,
             expiresAt: data.expires_at ? new Date(data.expires_at) : null,
+            // Iteración 6: Imagen de vacante
+            imageUrl: data.image_url,
+            imageStatus: data.image_status || 'none',
         };
     }
 }

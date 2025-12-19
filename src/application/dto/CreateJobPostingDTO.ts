@@ -24,6 +24,8 @@ export interface CreateJobPostingDTO {
     startDate: Date;
     // Iteración 3.1: Vigencia
     validityDays: number;
+    // Iteración 6: Imagen de vacante
+    imageUrl?: string;
 }
 
 export interface UpdateJobPostingDTO {
@@ -51,4 +53,6 @@ export interface UpdateJobPostingDTO {
     startDate?: Date;
     // Iteración 3.1: Vigencia
     validityDays?: number;
+    // Iteración 6: Imagen de vacante
+    imageUrl?: string;
 }

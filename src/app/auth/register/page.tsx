@@ -14,10 +14,18 @@ export default function RegisterPage() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [loadingGoogle, setLoadingGoogle] = useState(false); // Iteración 5
+    const [acceptedTerms, setAcceptedTerms] = useState(false); // Iteración 6: Términos
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setError('');
+
+        // Iteración 6: Validar aceptación de términos
+        if (!acceptedTerms) {
+            setError('Debes aceptar los términos y condiciones para continuar');
+            return;
+        }
+
         setLoading(true);
 
         const formData = new FormData(e.currentTarget);
@@ -53,6 +61,12 @@ export default function RegisterPage() {
 
     // Iteración 5: Registro con Google OAuth
     const handleGoogleSignup = async () => {
+        // Iteración 6: Validar aceptación de términos también para Google
+        if (!acceptedTerms) {
+            setError('Debes aceptar los términos y condiciones para continuar');
+            return;
+        }
+
         setError('');
         setLoadingGoogle(true);
 
@@ -111,6 +125,36 @@ export default function RegisterPage() {
                                 required
                                 className="text-base"
                             />
+
+                            {/* Iteración 6: Checkbox de Términos y Condiciones */}
+                            <div className="flex items-start gap-3">
+                                <input
+                                    type="checkbox"
+                                    id="acceptTerms"
+                                    checked={acceptedTerms}
+                                    onChange={(e) => setAcceptedTerms(e.target.checked)}
+                                    className="mt-1 h-4 w-4 rounded border-neutral-300 text-primary focus:ring-primary"
+                                />
+                                <label htmlFor="acceptTerms" className="text-sm text-neutral-600">
+                                    Acepto los{' '}
+                                    <Link
+                                        href="/legal/terms"
+                                        target="_blank"
+                                        className="text-primary font-medium hover:underline"
+                                    >
+                                        Términos y Condiciones
+                                    </Link>
+                                    {' '}y la{' '}
+                                    <Link
+                                        href="/legal/privacy"
+                                        target="_blank"
+                                        className="text-primary font-medium hover:underline"
+                                    >
+                                        Política de Privacidad
+                                    </Link>
+                                    {' '}de Meetwork.
+                                </label>
+                            </div>
 
                             {error && (
                                 <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded p-3">

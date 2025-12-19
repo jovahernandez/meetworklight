@@ -60,6 +60,45 @@ export interface INotificationService {
         userId: string,
         jobPostingId: string
     ): Promise<void>;
+
+    /**
+     * Iteración 6: Notifica al reclutador que su vacante fue publicada exitosamente.
+     * 
+     * @param userId - ID del usuario reclutador
+     * @param jobPostingId - ID de la vacante creada
+     * @param jobTitle - Título de la vacante
+     * @param userEmail - Email del reclutador
+     */
+    notifyJobPublished(
+        userId: string,
+        jobPostingId: string,
+        jobTitle: string,
+        userEmail: string
+    ): Promise<void>;
+
+    /**
+     * Iteración 6: Notifica al reclutador que su rol está por expirar por inactividad.
+     * 
+     * @param userId - ID del usuario reclutador
+     * @param userEmail - Email del reclutador
+     * @param daysLeft - Días restantes antes de que expire el rol
+     */
+    notifyRecruiterRoleExpiring(
+        userId: string,
+        userEmail: string,
+        daysLeft: number
+    ): Promise<void>;
+
+    /**
+     * Iteración 6: Notifica al reclutador que su rol ha expirado por inactividad.
+     * 
+     * @param userId - ID del usuario (ahora seeker)
+     * @param userEmail - Email del usuario
+     */
+    notifyRecruiterRoleExpired(
+        userId: string,
+        userEmail: string
+    ): Promise<void>;
 }
 
 /**

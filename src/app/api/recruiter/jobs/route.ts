@@ -4,6 +4,7 @@ import { SupabaseJobPostingRepository } from '@/infrastructure/supabase/Supabase
 import { SupabaseRecruiterProfileRepository } from '@/infrastructure/supabase/SupabaseRecruiterProfileRepository';
 import { CreateJobPosting } from '@/application/use-cases/recruiter/CreateJobPosting';
 import { ListOwnJobPostings } from '@/application/use-cases/recruiter/ListOwnJobPostings';
+import { DummyNotificationService } from '@/infrastructure/services/DummyNotificationService';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,6 +73,20 @@ export async function POST(request: NextRequest) {
         const job = await createJobUseCase.execute(user.id, body);
 
         console.log('✅ DEBUG - Job created:', job.id);
+
+        // Iteración 6: Enviar notificación de vacante publicada
+        try {
+            const notificationService = new DummyNotificationService();
+            await notificationService.notifyJobPublished(
+                user.id,
+                job.id,
+                job.title,
+                user.email || ''
+            );
+        } catch (notifError) {
+            // No fallar la creación si la notificación falla
+            console.error('Error sending job published notification:', notifError);
+        }
 
         return NextResponse.json({
             success: true,

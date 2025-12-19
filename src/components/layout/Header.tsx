@@ -95,6 +95,18 @@ export function Header() {
                             <div className="text-sm text-neutral-500">Cargando...</div>
                         ) : user ? (
                             <>
+                                {/* Botón Panel para Reclutadores - sutil pero visible */}
+                                {userRole === 'recruiter' && (
+                                    <Link
+                                        href="/recruiter/jobs"
+                                        className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary bg-primary-50 hover:bg-primary-100 rounded-md transition-colors border border-primary-200"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                                        </svg>
+                                        Panel
+                                    </Link>
+                                )}
                                 <span className="text-sm text-neutral-700">
                                     {user.email}
                                 </span>
@@ -211,6 +223,19 @@ export function Header() {
                                 <div className="text-sm text-neutral-500 py-2">Cargando...</div>
                             ) : user ? (
                                 <>
+                                    {/* Botón Panel para Reclutadores en móvil */}
+                                    {userRole === 'recruiter' && (
+                                        <Link
+                                            href="/recruiter/jobs"
+                                            className="flex items-center justify-center gap-2 w-full py-2.5 text-base font-medium text-primary bg-primary-50 hover:bg-primary-100 rounded-md transition-colors border border-primary-200"
+                                            onClick={() => setMobileMenuOpen(false)}
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                                            </svg>
+                                            Panel de Reclutador
+                                        </Link>
+                                    )}
                                     <div className="text-sm text-neutral-700 py-2 px-3 bg-neutral-50 rounded-md">
                                         {user.email}
                                     </div>
