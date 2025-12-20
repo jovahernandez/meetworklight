@@ -1,7 +1,15 @@
-// API route para buscar información de código postal usando SEPOMEX
-// Usa múltiples APIs de respaldo para mayor confiabilidad
+// API route para buscar información de código postal mexicano
+// Usa Zippopotam.us como fuente principal (gratuita y confiable)
 
 import { NextRequest, NextResponse } from 'next/server';
+
+interface PostalCodeData {
+    codigo_postal: string;
+    colonias: string[];
+    municipio: string;
+    estado: string;
+    ciudad: string;
+}
 
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
@@ -15,27 +23,14 @@ export async function GET(request: NextRequest) {
     }
 
     try {
-        // Intentar con API 1: api-sepomex.hckdrk.mx (más confiable)
-        let data = await tryAPI1(cp);
+        // Usar Zippopotam.us - API gratuita y confiable
+        const data = await fetchFromZippopotam(cp);
 
         if (!data) {
-            // Fallback a API 2: copomex.com
-            data = await tryAPI2(cp);
-        }
-
-        if (!data) {
-            // Si ninguna API funciona, devolver error claro
             return NextResponse.json({
-                success: true,
-                data: {
-                    codigo_postal: cp,
-                    colonias: [],
-                    municipio: '',
-                    estado: '',
-                    ciudad: '',
-                },
-                warning: 'No se pudo obtener información del CP. Ingresa la dirección manualmente.',
-            });
+                success: false,
+                error: 'No se encontró información para este código postal.',
+            }, { status: 404 });
         }
 
         return NextResponse.json({
@@ -46,60 +41,17 @@ export async function GET(request: NextRequest) {
     } catch (error) {
         console.error('Error fetching CP data:', error);
         return NextResponse.json({
-            success: true,
-            data: {
-                codigo_postal: cp,
-                colonias: [],
-                municipio: '',
-                estado: '',
-                ciudad: '',
-            },
-            warning: 'Error de conexión. Ingresa la dirección manualmente.',
-        });
+            success: false,
+            error: 'Error al buscar el código postal. Intenta de nuevo.',
+        }, { status: 500 });
     }
 }
 
-// API 1: api-sepomex.hckdrk.mx
-async function tryAPI1(cp: string): Promise<any | null> {
+// Zippopotam.us - API gratuita para códigos postales mundiales
+async function fetchFromZippopotam(cp: string): Promise<PostalCodeData | null> {
     try {
         const response = await fetch(
-            `https://api-sepomex.hckdrk.mx/query/info_cp/${cp}`,
-            {
-                method: 'GET',
-                headers: { 'Accept': 'application/json' },
-                signal: AbortSignal.timeout(5000), // 5 segundos timeout
-            }
-        );
-
-        if (!response.ok) return null;
-
-        const data = await response.json();
-
-        if (data.error || !data.response) return null;
-
-        // Formatear respuesta
-        const items = Array.isArray(data.response) ? data.response : [data.response];
-
-        if (!items.length || !items[0]) return null;
-
-        return {
-            codigo_postal: cp,
-            colonias: items.map((item: any) => item.asentamiento).filter(Boolean),
-            municipio: items[0].municipio || '',
-            estado: items[0].estado || '',
-            ciudad: items[0].ciudad || items[0].municipio || '',
-        };
-    } catch (e) {
-        console.log('API1 failed:', e);
-        return null;
-    }
-}
-
-// API 2: copomex.com (con token de pruebas)
-async function tryAPI2(cp: string): Promise<any | null> {
-    try {
-        const response = await fetch(
-            `https://api.copomex.com/query/info_cp/${cp}?token=pruebas`,
+            `https://api.zippopotam.us/mx/${cp}`,
             {
                 method: 'GET',
                 headers: { 'Accept': 'application/json' },
@@ -107,25 +59,67 @@ async function tryAPI2(cp: string): Promise<any | null> {
             }
         );
 
-        if (!response.ok) return null;
+        // 404 significa que el CP no existe
+        if (response.status === 404) {
+            return null;
+        }
+
+        if (!response.ok) {
+            return null;
+        }
 
         const data = await response.json();
 
-        if (data.error || !data.response) return null;
+        if (!data.places || data.places.length === 0) {
+            return null;
+        }
 
-        const items = Array.isArray(data.response) ? data.response : [data.response];
+        // Extraer colonias (place names)
+        const colonias = data.places.map((place: any) => place['place name']).filter(Boolean);
 
-        if (!items.length || !items[0]) return null;
+        // El estado viene del primer lugar
+        const estado = data.places[0].state || '';
+
+        // Determinar el municipio/ciudad
+        // Zippopotam no da municipio directamente, usamos el primer lugar como referencia
+        const municipio = inferMunicipio(colonias, estado);
 
         return {
             codigo_postal: cp,
-            colonias: items.map((item: any) => item.asentamiento).filter(Boolean),
-            municipio: items[0].municipio || '',
-            estado: items[0].estado || '',
-            ciudad: items[0].ciudad || items[0].municipio || '',
+            colonias,
+            municipio,
+            estado,
+            ciudad: municipio,
         };
     } catch (e) {
-        console.log('API2 failed:', e);
+        console.error('Zippopotam API error:', e);
         return null;
     }
+}
+
+// Función auxiliar para inferir el municipio basado en las colonias
+function inferMunicipio(colonias: string[], estado: string): string {
+    // Si hay una colonia que termina en "Centro", probablemente es el municipio
+    const centroColonia = colonias.find((c: string) =>
+        c.toLowerCase().includes('centro') ||
+        c.toLowerCase().includes('downtown')
+    );
+
+    if (centroColonia) {
+        // Extraer el nombre del municipio del "XXX Centro"
+        const match = centroColonia.match(/^(.+?)\s*Centro/i);
+        if (match) {
+            return match[1].trim();
+        }
+    }
+
+    // Si no, usar el estado como fallback o la primera colonia
+    if (colonias.length > 0) {
+        const firstColonia = colonias[0];
+        return firstColonia
+            .replace(/\s*(Norte|Sur|Oriente|Poniente|Centro)$/i, '')
+            .trim() || estado;
+    }
+
+    return estado;
 }
