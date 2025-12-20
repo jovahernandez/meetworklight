@@ -58,14 +58,17 @@ export class SupabaseJobPostingRepository implements IJobPostingRepository {
 
         let query = supabase.from('job_postings').select('*');
 
-        // Iteración 3.1: Usar is_active (BOOLEAN) en lugar de status
+        // Iteración 3.1: Filtrar por is_active O status para compatibilidad
+        // Las vacantes viejas pueden tener status='active', las nuevas tienen is_active=true
         if (filters?.isActive !== undefined) {
+            // Si explícitamente se pide filtrar, usar is_active
             query = query.eq('is_active', filters.isActive);
             console.log('🔎 DEBUG findAll - Filtering by is_active =', filters.isActive);
         } else {
-            // By default, only show active jobs
-            query = query.eq('is_active', true);
-            console.log('🔎 DEBUG findAll - Filtering by is_active = true (default)');
+            // Por defecto, mostrar vacantes activas (compatible con ambos esquemas)
+            // Usar OR para soportar tanto is_active=true como status='active'
+            query = query.or('is_active.eq.true,status.eq.active');
+            console.log('🔎 DEBUG findAll - Filtering by is_active=true OR status=active (default)');
         }
 
         // Iteración 3.1: Filtrar vacantes expiradas (solo para buscadores)
