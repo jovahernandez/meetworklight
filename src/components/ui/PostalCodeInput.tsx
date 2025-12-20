@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 
@@ -39,6 +39,9 @@ export function PostalCodeInput({
     const [data, setData] = useState<PostalCodeData | null>(null);
     const [selectedColonia, setSelectedColonia] = useState(initialColonia);
 
+    // Usar ref para evitar llamadas infinitas al callback
+    const lastNotifiedRef = useRef<string>('');
+
     const fetchPostalCodeData = useCallback(async (cp: string) => {
         if (cp.length !== 5) {
             setData(null);
@@ -57,13 +60,20 @@ export function PostalCodeInput({
                 // Auto-seleccionar la primera colonia si hay solo una
                 if (result.data.colonias?.length === 1) {
                     setSelectedColonia(result.data.colonias[0]);
+                } else {
+                    setSelectedColonia('');
+                }
+
+                // Mostrar advertencia si son datos de respaldo
+                if (result.warning) {
+                    setError(result.warning);
                 }
             } else {
                 setError(result.error || 'No se encontró el código postal');
                 setData(null);
             }
         } catch (err) {
-            setError('Error al buscar código postal');
+            setError('Error al buscar código postal. Ingresa la dirección manualmente.');
             setData(null);
         } finally {
             setLoading(false);
@@ -77,19 +87,38 @@ export function PostalCodeInput({
         }
     }, [postalCode, fetchPostalCodeData]);
 
-    // Notificar cambios al componente padre
+    // Notificar cambios al componente padre - SOLO cuando realmente cambia
     useEffect(() => {
         if (data && selectedColonia) {
             const fullAddress = `${selectedColonia}, ${data.municipio}, ${data.estado}, CP ${postalCode}`;
-            onAddressChange({
-                postalCode,
-                colonia: selectedColonia,
-                municipio: data.municipio,
-                estado: data.estado,
-                fullAddress,
-            });
+
+            // Solo notificar si la dirección cambió
+            if (lastNotifiedRef.current !== fullAddress) {
+                lastNotifiedRef.current = fullAddress;
+                onAddressChange({
+                    postalCode,
+                    colonia: selectedColonia,
+                    municipio: data.municipio,
+                    estado: data.estado,
+                    fullAddress,
+                });
+            }
         }
-    }, [data, selectedColonia, postalCode, onAddressChange]);
+    }, [data, selectedColonia, postalCode]); // Removido onAddressChange de deps para evitar loops
+
+    const handlePostalCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const value = e.target.value.replace(/\D/g, '').slice(0, 5);
+        setPostalCode(value);
+        if (value.length < 5) {
+            setData(null);
+            setSelectedColonia('');
+            setError('');
+        }
+    };
+
+    const handleColoniaChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        setSelectedColonia(e.target.value);
+    };
 
     return (
         <div className="space-y-4">
@@ -98,16 +127,11 @@ export function PostalCodeInput({
                 <Input
                     label={label}
                     type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={postalCode}
-                    onChange={(e) => {
-                        const value = e.target.value.replace(/\D/g, '').slice(0, 5);
-                        setPostalCode(value);
-                        if (value.length < 5) {
-                            setData(null);
-                            setSelectedColonia('');
-                        }
-                    }}
-                    placeholder="Ej: 06600"
+                    onChange={handlePostalCodeChange}
+                    placeholder="Ej: 64000"
                     maxLength={5}
                     required={required}
                     className="text-base"
@@ -123,7 +147,9 @@ export function PostalCodeInput({
             </div>
 
             {error && (
-                <p className="text-sm text-red-600">{error}</p>
+                <p className={`text-sm ${error.includes('respaldo') || error.includes('manualmente') ? 'text-amber-600' : 'text-red-600'}`}>
+                    {error}
+                </p>
             )}
 
             {/* Mostrar datos encontrados */}
@@ -141,7 +167,7 @@ export function PostalCodeInput({
                         <Select
                             label="Colonia *"
                             value={selectedColonia}
-                            onChange={(e) => setSelectedColonia(e.target.value)}
+                            onChange={handleColoniaChange}
                             required={required}
                             className="text-base"
                         >
@@ -163,11 +189,11 @@ export function PostalCodeInput({
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <p className="text-xs text-neutral-500 mb-1">Municipio/Alcaldía</p>
-                            <p className="font-medium text-neutral-900">{data.municipio}</p>
+                            <p className="font-medium text-neutral-900">{data.municipio || 'No disponible'}</p>
                         </div>
                         <div>
                             <p className="text-xs text-neutral-500 mb-1">Estado</p>
-                            <p className="font-medium text-neutral-900">{data.estado}</p>
+                            <p className="font-medium text-neutral-900">{data.estado || 'No disponible'}</p>
                         </div>
                     </div>
 
