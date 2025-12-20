@@ -69,10 +69,11 @@ export class SupabaseJobPostingRepository implements IJobPostingRepository {
         }
 
         // Iteración 3.1: Filtrar vacantes expiradas (solo para buscadores)
-        // Si expires_at existe, debe ser >= hoy. Si es NULL, se muestra (vacantes viejas)
-        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
-        console.log('🔎 DEBUG findAll - Today date for expiry check:', today);
-        query = query.or(`expires_at.is.null,expires_at.gte.${today}`);
+        // Si expires_at existe, debe ser >= hoy. Si es NULL, se muestra (vacantes viejas sin expiración)
+        // NOTA: Removemos este filtro temporalmente porque puede causar problemas
+        // con vacantes que no tienen el campo expires_at
+        // const today = new Date().toISOString().split('T')[0];
+        // query = query.or(`expires_at.is.null,expires_at.gte.${today}`);
 
         if (filters?.location) {
             query = query.ilike('location', `%${filters.location}%`);
@@ -266,8 +267,8 @@ export class SupabaseJobPostingRepository implements IJobPostingRepository {
             // Iteración 3.1: Vigencia (sin inventar fechas para vacantes viejas)
             validityDays: data.validity_days || 30,
             expiresAt: data.expires_at ? new Date(data.expires_at) : null,
-            // Iteración 6: Imagen de vacante
-            imageUrl: data.image_url,
+            // Iteración 6: Imagen de vacante (campos opcionales, pueden no existir en DB)
+            imageUrl: data.image_url || undefined,
             imageStatus: data.image_status || 'none',
         };
     }

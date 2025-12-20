@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
 
     // Inicializar cliente admin dentro de la función (lazy initialization)
     const supabaseAdmin = getSupabaseAdmin();
-    
+
     const notificationService = new DummyNotificationService();
     const results = {
         checked: 0,
