@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -108,6 +108,20 @@ export default function CreateJobPage() {
             setUploadingImage(false);
         }
     };
+
+    // Callback memoizado para evitar re-renders infinitos en PostalCodeInput
+    const handlePostalCodeChange = useCallback((data: {
+        postalCode: string;
+        colonia: string;
+        municipio: string;
+        estado: string;
+        fullAddress: string;
+    }) => {
+        setFormData(prev => ({
+            ...prev,
+            worksiteLocation: data.fullAddress,
+        }));
+    }, []);
 
     const addTask = () => {
         setTasks([...tasks, '']);
@@ -482,12 +496,7 @@ export default function CreateJobPage() {
                                             Ubicación de la Obra (Autocompletado por CP)
                                         </h4>
                                         <PostalCodeInput
-                                            onAddressChange={(data) => {
-                                                setFormData({
-                                                    ...formData,
-                                                    worksiteLocation: data.fullAddress,
-                                                });
-                                            }}
+                                            onAddressChange={handlePostalCodeChange}
                                             label="Código Postal de la Obra *"
                                             required={true}
                                         />

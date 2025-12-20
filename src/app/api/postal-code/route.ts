@@ -17,12 +17,12 @@ export async function GET(request: NextRequest) {
     try {
         // Intentar con API 1: api-sepomex.hckdrk.mx (más confiable)
         let data = await tryAPI1(cp);
-        
+
         if (!data) {
             // Fallback a API 2: copomex.com
             data = await tryAPI2(cp);
         }
-        
+
         if (!data) {
             // Si ninguna API funciona, devolver error claro
             return NextResponse.json({
@@ -74,12 +74,12 @@ async function tryAPI1(cp: string): Promise<any | null> {
         if (!response.ok) return null;
 
         const data = await response.json();
-        
+
         if (data.error || !data.response) return null;
 
         // Formatear respuesta
         const items = Array.isArray(data.response) ? data.response : [data.response];
-        
+
         if (!items.length || !items[0]) return null;
 
         return {
@@ -110,11 +110,11 @@ async function tryAPI2(cp: string): Promise<any | null> {
         if (!response.ok) return null;
 
         const data = await response.json();
-        
+
         if (data.error || !data.response) return null;
 
         const items = Array.isArray(data.response) ? data.response : [data.response];
-        
+
         if (!items.length || !items[0]) return null;
 
         return {
